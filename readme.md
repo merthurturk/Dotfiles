@@ -32,3 +32,18 @@ brew bundle --file=~/Dotfiles/Brewfile
 
 This will install everything listed in the file.
 
+# Instructions for Visual Studio Code
+
+
+1. Open a terminal and navigate to the directory containing your dotfiles:
+    ```bash
+    cd ~/Documents/Dotfiles
+    ```
+
+2. Use symbolic links (`ln -s`) to link each dotfile to its corresponding location. For example:
+    ```bash
+    ln -s ~/Documents/Dotfiles/visual-studio-code/keybindings.json ~/Library/Application\ Support/Code/User/keybindings.json
+    ln -s ~/Documents/Dotfiles/visual-studio-code/settings.json ~/Library/Application\ Support/Code/User/settings.json
+    ```
+
+**Note:** Adjust the file paths as needed for your specific setup.
