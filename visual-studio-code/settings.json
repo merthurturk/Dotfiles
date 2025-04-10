@@ -1,4 +1,5 @@
 {
     "workbench.colorTheme": "One Dark Pro Flat",
-    "git.autofetch": true
+    "git.autofetch": true,
+    "git.confirmSync": false
 }
