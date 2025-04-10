@@ -1,0 +1,10 @@
+astro-build.astro-vscode
+bmewburn.vscode-intelephense-client
+bradlc.vscode-tailwindcss
+editorconfig.editorconfig
+esbenp.prettier-vscode
+github.copilot
+github.copilot-chat
+laravel.vscode-laravel
+tamasfe.even-better-toml
+zhuangtongfa.material-theme

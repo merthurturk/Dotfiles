@@ -1,3 +1,11 @@
+# Initial Setup
+
+Make sure that all commands under `bin` directory are executable by running the following:
+
+```bash
+chmod +x ./bin/*
+```
+
 # Instructions for Linking Dotfiles
 
 To link the dotfiles to their appropriate locations, use the following steps:
@@ -34,6 +42,11 @@ This will install everything listed in the file.
 
 # Instructions for Visual Studio Code
 
+Save a list of all extensions in your Visual Studio Code:
+
+```bash
+./bin/save_vscode_extensions.sh
+```
 
 1. Open a terminal and navigate to the directory containing your dotfiles:
     ```bash
@@ -44,6 +57,11 @@ This will install everything listed in the file.
     ```bash
     ln -s ~/Documents/Dotfiles/visual-studio-code/keybindings.json ~/Library/Application\ Support/Code/User/keybindings.json
     ln -s ~/Documents/Dotfiles/visual-studio-code/settings.json ~/Library/Application\ Support/Code/User/settings.json
+    ```
+
+3. Install all the missing extensions:
+    ```bash
+    ./bin/install_vscode_extensions.sh
     ```
 
 **Note:** Adjust the file paths as needed for your specific setup.
