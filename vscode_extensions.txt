@@ -1,10 +1,16 @@
 astro-build.astro-vscode
-bmewburn.vscode-intelephense-client
 bradlc.vscode-tailwindcss
+devsense.composer-php-vscode
+devsense.intelli-php-vscode
+devsense.phptools-vscode
+devsense.profiler-php-vscode
 editorconfig.editorconfig
 esbenp.prettier-vscode
 github.copilot
 github.copilot-chat
 laravel.vscode-laravel
+mehedidracula.php-namespace-resolver
+open-southeners.laravel-pint
 tamasfe.even-better-toml
+vue.volar
 zhuangtongfa.material-theme

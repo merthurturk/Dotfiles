@@ -1,5 +1,10 @@
 {
     "workbench.colorTheme": "One Dark Pro Flat",
     "git.autofetch": true,
-    "git.confirmSync": false
+    "git.confirmSync": false,
+    "editor.formatOnSave": true,
+    "laravel-pint.enable": true,
+    "[php]": {
+        "editor.defaultFormatter": "DEVSENSE.phptools-vscode"
+    }
 }
