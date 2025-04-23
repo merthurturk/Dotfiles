@@ -64,8 +64,17 @@ Save a list of all extensions in your Visual Studio Code:
    ```
 
 3. Install all the missing extensions:
+
    ```bash
    ./bin/install_vscode_extensions.sh
    ```
 
 **Note:** Adjust the file paths as needed for your specific setup.
+
+# Instructions for Karabiner Elements
+
+1. Use links (`ln -s`) to link karabiner configuration to its corresponding location. For example:
+
+   ```bash
+   ln -s ~/Documents/Dotfiles/karabiner.json ~/.config/karabiner/karabiner.json
+   ```
