@@ -10,7 +10,7 @@ after-login-command = []
 # 'after-startup-command' is run after 'after-login-command'
 # Available commands : https://nikitabobko.github.io/AeroSpace/commands
 after-startup-command = [
-    'exec-and-forget borders active_color=0xfff5d742 inactive_color=0x00f5d742 width=5.0'
+    'exec-and-forget borders active_color=0xfff5d742 inactive_color=0x00f5d742 width=10.0'
 ]
 
 # Start AeroSpace at login
@@ -94,7 +94,7 @@ automatically-unhide-macos-hidden-apps = false
 [[on-window-detected]]
     if.app-id = 'md.obsidian'
     check-further-callbacks = true
-    run = ['move-node-to-workspace P']
+    run = ['move-node-to-workspace O']
 
 [[on-window-detected]]
     if.app-id = 'com.apple.Terminal'
