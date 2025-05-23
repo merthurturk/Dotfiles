@@ -1,59 +1,69 @@
 {
-    "git.autofetch": true,
-    "git.confirmSync": false,
-    "editor.formatOnSave": true,
-    "laravel-pint.enable": true,
-    "[php]": {
-        "editor.defaultFormatter": "open-southeners.laravel-pint"
-    },
-    "[javascript]": {
-        "editor.defaultFormatter": "esbenp.prettier-vscode"
-    },
-    "[vue]": {
-        "editor.defaultFormatter": "Vue.volar"
-    },
-    "prettier.bracketSameLine": true,
-    "prettier.printWidth": 100,
-    "github.copilot.chat.followUps": "always",
-    "github.copilot.nextEditSuggestions.enabled": true,
-    "javascript.updateImportsOnFileMove.enabled": "always",
-    "explorer.confirmDragAndDrop": false,
-    "workbench.colorTheme": "Monokai Pro (Filter Octagon)",
-    "workbench.iconTheme": "Monokai Pro (Filter Octagon) Icons",
-    "editor.fontFamily": "'Berkeley Mono', monospace",
-    "terminal.integrated.fontFamily": "monospace",
-    "editor.fontSize": 14,
-    "editor.fontVariations": true,
-    "editor.fontWeight": "normal",
-    "editor.fontLigatures": true,
-    "editor.minimap.enabled": false,
-    "editor.cursorSmoothCaretAnimation": "on",
-    "workbench.preferredDarkColorTheme": "Monokai Pro",
-    "workbench.preferredHighContrastColorTheme": "Monokai Pro",
-    "workbench.preferredHighContrastLightColorTheme": "Monokai Pro Light",
-    "workbench.preferredLightColorTheme": "Monokai Pro Light",
-    "workbench.fontAliasing": "auto",
-    "workbench.tree.indent": 16,
-    "workbench.tree.renderIndentGuides": "always",
-    "workbench.view.alwaysShowHeaderActions": true,
-    "workbench.editor.highlightModifiedTabs": true,
-    "workbench.editor.pinnedTabsOnSeparateRow": true,
-    "todo-tree.regex.regexCaseSensitive": false,
-    "todo-tree.general.tags": [
-        "BUG",
-        "HACK",
-        "FIXME",
-        "TODO"
-    ],
-    "[html]": {
-        "editor.defaultFormatter": "esbenp.prettier-vscode"
-    },
-    "github.copilot.enable": {
-        "*": true,
-        "plaintext": false,
-        "markdown": false,
-        "scminput": false,
-        "php": true
-    },
-    "github.copilot.chat.codesearch.enabled": true
+  "git.autofetch": true,
+  "git.confirmSync": false,
+  "editor.formatOnSave": true,
+  "laravel-pint.enable": true,
+  "[php]": {
+    "editor.defaultFormatter": "open-southeners.laravel-pint"
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[vue]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "prettier.bracketSameLine": true,
+  "prettier.printWidth": 100,
+  "github.copilot.chat.followUps": "always",
+  "github.copilot.nextEditSuggestions.enabled": true,
+  "javascript.updateImportsOnFileMove.enabled": "always",
+  "explorer.confirmDragAndDrop": false,
+  "workbench.colorTheme": "Monokai Pro (Filter Octagon)",
+  "workbench.iconTheme": "Monokai Pro (Filter Octagon) Icons",
+  "editor.fontFamily": "'Berkeley Mono', monospace",
+  "terminal.integrated.fontFamily": "monospace",
+  "editor.lineHeight": 32,
+  "editor.letterSpacing": 0.2,
+  "editor.fontVariations": true,
+  "files.trimTrailingWhitespace": true,
+  "editor.fontWeight": "400",
+  "prettier.eslintIntegration": true,
+  "editor.cursorStyle": "line",
+  "editor.cursorWidth": 5,
+  "editor.cursorBlinking": "solid",
+  "editor.renderWhitespace": "boundary",
+  "editor.fontLigatures": true,
+  "editor.minimap.enabled": false,
+  "editor.cursorSmoothCaretAnimation": "on",
+  "workbench.preferredDarkColorTheme": "Monokai Pro",
+  "workbench.preferredHighContrastColorTheme": "Monokai Pro",
+  "workbench.preferredHighContrastLightColorTheme": "Monokai Pro Light",
+  "workbench.preferredLightColorTheme": "Monokai Pro Light",
+  "workbench.fontAliasing": "auto",
+  "workbench.tree.indent": 16,
+  "workbench.tree.renderIndentGuides": "always",
+  "workbench.view.alwaysShowHeaderActions": true,
+  "workbench.editor.highlightModifiedTabs": true,
+  "workbench.editor.pinnedTabsOnSeparateRow": true,
+  "todo-tree.regex.regexCaseSensitive": false,
+  "todo-tree.general.tags": ["BUG", "HACK", "FIXME", "TODO"],
+  "[html]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "github.copilot.enable": {
+    "*": true,
+    "plaintext": false,
+    "markdown": false,
+    "scminput": false,
+    "php": true,
+    "jsonc": true,
+    "vue": true
+  },
+  "github.copilot.chat.codesearch.enabled": true,
+  "[json]": {
+    "editor.defaultFormatter": "vscode.json-language-features"
+  },
+  "editor.tabSize": 2,
+  "github.copilot.advanced": {},
+  "git.blame.editorDecoration.enabled": true
 }
