@@ -145,6 +145,11 @@ and toolbar — what you want for a chat panel living in ~500pt.
 
 A scene is a list of window specs, left to right:
 
+A workspace running a scene shows the scene's **badge** — its glyph and name in
+its own colour — instead of the usual app icons, because "chill" says more than
+three browser glyphs do. Set `icon` and `badge` per scene; badges are defined in
+`config/sketchybar/colors.sh`.
+
 | Spec | Opens |
 |---|---|
 | `app:<App Name>` | summons that app's window, launching it only if needed |
@@ -265,6 +270,10 @@ rediscovered:
   read the Focus database. `focus.sh` publishes what it reads to
   `~/.local/state/aerospace/focus`; the launcher (run by AeroSpace, which has no
   FDA) reads that file instead of the database.
+- **Latte's peach can't carry text.** As a solid fill it measures 2.64:1 with
+  white and 2.68:1 with dark text — neither passes. Scene badges therefore use a
+  pale tint with a deep saturated foreground (5.92:1), flipping to the deep
+  colour as a fill only when focused (7.4:1 on white).
 - **App names can carry invisible characters.** WhatsApp reports as
   `\u200eWhatsApp` (a leading left-to-right mark), so `$2 == "WhatsApp"` never
   matches and callers wrongly conclude it isn't running. `find_app_window` in

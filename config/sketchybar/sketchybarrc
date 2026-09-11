@@ -13,27 +13,7 @@ export CONFIG_DIR="$HOME/.config/sketchybar"
 PLUGIN_DIR="$CONFIG_DIR/plugins"
 source "$CONFIG_DIR/colors.sh"
 
-##### Fonts #####
-# Text is Berkeley Mono so the bar matches the terminal; icons stay Hack Nerd
-# Font because Berkeley Mono carries no Nerd Font glyphs.
-#
-# Every Berkeley Mono weight installs as its own *family* with style "Regular",
-# so weight is selected by family name. Asking for ":Bold:" silently falls back
-# to the system font -- it looks like it worked but renders nothing of Berkeley.
-if [ "$(osascript -l JavaScript -e 'ObjC.import("AppKit"); $.NSFont.fontWithNameSize($("BerkeleyMono-SemiCondensed"), 12).isNil() ? "no" : "yes"' 2>/dev/null)" = "yes" ]; then
-  FONT_REGULAR="Berkeley Mono SemiCondensed:Regular"
-  FONT_MEDIUM="Berkeley Mono SemiBold SemiCondensed:Regular"
-  FONT_BOLD="Berkeley Mono Bold SemiCondensed:Regular"
-else
-  # Berkeley Mono is a commercial font and can't ship in this repo; fall back
-  # to Hack so a fresh machine still looks right before it's installed.
-  FONT_REGULAR="Hack Nerd Font:Regular"
-  FONT_MEDIUM="Hack Nerd Font:Semibold"
-  FONT_BOLD="Hack Nerd Font:Bold"
-fi
-
-ICON_FONT="Hack Nerd Font"                    # glyphs only, never text
-APP_FONT="sketchybar-app-font:Regular:16.0"   # per-app glyphs in workspace pills
+source "$CONFIG_DIR/fonts.sh"
 
 ##### Geometry #####
 # macOS 26 draws window corners as squircles, not circles -- fitting the arc of

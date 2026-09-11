@@ -51,3 +51,20 @@ export WS_ACTIVE_BORDER=0xff1e66f5
 export WS_OCCUPIED_BG=0xffdce0e8
 export WS_OCCUPIED_FG=$TEXT
 export WS_OCCUPIED_BORDER=0xffccd0da
+
+# Scene badges.
+#
+# Latte's peach is unusable as a solid fill: white text lands at 2.64:1 on it
+# and dark text at 2.68:1 -- neither passes. So a scene pill uses a pale tint
+# with a deep, saturated foreground instead, and only flips to the deep colour
+# as a fill when focused. Every pair below was measured at >= 4.5:1.
+export BADGE_PEACH_TINT=0xfffbe3d2
+export BADGE_PEACH_DEEP=0xff9a3412
+export BADGE_TEAL_TINT=0xffd6f0ee
+export BADGE_TEAL_DEEP=0xff0f6d68
+export BADGE_MAUVE_TINT=0xffe9dcfb
+export BADGE_MAUVE_DEEP=0xff6b21a8
+export BADGE_BLUE_TINT=0xffdbe6fd
+export BADGE_BLUE_DEEP=0xff1e40af
+export BADGE_GREEN_TINT=0xffdcefd6
+export BADGE_GREEN_DEEP=0xff2d6a1f
