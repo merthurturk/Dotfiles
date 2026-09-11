@@ -1,19 +1,20 @@
 # dotfiles
 
-macOS tiling setup: [AeroSpace](https://nikitabobko.github.io/AeroSpace/) driving
+macOS setup: [AeroSpace](https://nikitabobko.github.io/AeroSpace/) tiling driving
 [SketchyBar](https://felixkratz.github.io/SketchyBar/), themed
-[Catppuccin Latte](https://github.com/catppuccin/catppuccin) (light).
+[Catppuccin Latte](https://github.com/catppuccin/catppuccin) (light), plus
+Ghostty, Karabiner and VS Code config.
 
 ## Install on a new Mac
 
 ```sh
-git clone <this-repo> ~/.dotfiles
+git clone https://github.com/merthurturk/Dotfiles.git ~/.dotfiles
 ~/.dotfiles/install.sh
 ```
 
-`install.sh` installs Homebrew and the `Brewfile`, symlinks the configs, compiles
-the Swift picker, starts the services, and prints the GUI-only steps that remain.
-It is re-runnable: anything it would overwrite is moved to
+`install.sh` installs Homebrew and the `Brewfile`, symlinks every config,
+compiles the Swift picker, starts the services, and prints the GUI-only steps
+that remain. It is re-runnable: anything it would overwrite is moved to
 `~/.dotfiles-backup/<timestamp>/` first.
 
 ## Layout
@@ -24,6 +25,8 @@ It is re-runnable: anything it would overwrite is moved to
 | `config/aerospace/` | `~/.config/aerospace/` |
 | `config/sketchybar/` | `~/.config/sketchybar/` |
 | `config/ghostty/` | `~/.config/ghostty/` |
+| `karabiner.json` | `~/.config/karabiner/karabiner.json` |
+| `visual-studio-code/*.json` | `~/Library/Application Support/Code/User/` |
 
 Anything added under `config/` is linked to `~/.config/<name>` automatically —
 no edit to `install.sh` needed.
@@ -39,7 +42,7 @@ Right: now-playing, volume/battery/clock cluster, Focus chip.
 - **Now playing** — Apple Music; click focuses its window *through AeroSpace*,
   so it switches to the right workspace. Hidden when Music isn't running.
 
-## Keybindings added on top of the AeroSpace defaults
+## Keybindings on top of the AeroSpace defaults
 
 | Key | Action |
 |---|---|
@@ -57,9 +60,9 @@ Passing a profile name skips the picker.
 
 ## The picker
 
-`config/src/picker.swift` compiles to a standalone chooser: auto-focused search
-field, fuzzy filter, arrows + enter, esc to cancel. Generic — reads lines on
-stdin, prints the choice on stdout:
+`config/aerospace/src/picker.swift` compiles to a standalone chooser:
+auto-focused search field, fuzzy filter, arrows + enter, esc to cancel. Generic —
+reads lines on stdin, prints the choice on stdout:
 
 ```sh
 ls ~/Projects | PICKER_PROMPT="Open project" ~/.config/aerospace/bin/picker
@@ -71,6 +74,25 @@ Rebuild after editing:
 swiftc -O -o ~/.config/aerospace/bin/picker \
           ~/.config/aerospace/src/picker.swift -framework AppKit
 ```
+
+## VS Code extensions
+
+Symlinking `settings.json` and `keybindings.json` is handled by `install.sh`.
+Extensions are a separate list:
+
+```sh
+./bin/install_vscode_extensions.sh   # install everything in vscode_extensions.txt
+./bin/save_vscode_extensions.sh      # refresh that list from what's installed
+```
+
+## Updating the Brewfile
+
+```sh
+brew bundle dump --file=~/.dotfiles/Brewfile --force
+```
+
+Note that a dump is unsorted and uncommented — the checked-in `Brewfile` groups
+entries by purpose, so prefer editing it by hand.
 
 ## Notes worth keeping
 

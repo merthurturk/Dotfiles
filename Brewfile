@@ -1,6 +1,7 @@
 # Taps
 tap "felixkratz/formulae"   # sketchybar
 tap "nikitabobko/tap"       # aerospace
+tap "stripe/stripe-cli"
 
 # Window manager + status bar
 cask "aerospace"
@@ -14,3 +15,10 @@ cask "font-sketchybar-app-font"
 
 # Terminal
 cask "ghostty"
+
+# Keyboard remapping (see karabiner.json)
+cask "karabiner-elements"
+
+# CLI
+brew "gh"
+brew "stripe/stripe-cli/stripe"
