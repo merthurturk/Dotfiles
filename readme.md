@@ -78,18 +78,52 @@ Two traps worth remembering:
 - For the same reason Ghostty needs `font-family-bold` / `font-family-italic`
   named explicitly, or it synthesises them.
 
-## The command palette
+## The command palette — ⌥space
 
-`⌥space` opens `config/aerospace/launcher.sh` in the picker: scenes, the Focus
-toggle, window and layout commands, workspace switching, now-playing, config
-reloads. Each entry shows its own keybinding in the detail column, so it
-doubles as the place to rediscover a binding you've forgotten.
+**This is the main entry point.** If you remember one shortcut, remember this
+one: everything below is reachable from it, and each entry shows its own
+keybinding, so it doubles as the place to rediscover a binding you've forgotten.
 
-The menu is rebuilt on every invocation, so it reflects current state — Focus
-reads on or off, only *open* scenes offer a Close, only *occupied* workspaces
-are listed with the apps on them.
+```
+Open scene: chill          ⌥⇧space
+Close scene: chill         workspace 3
+Focus: turn off            Do Not Disturb is on
+Focus settings             right-click the bar chip
+Chrome beside this window  ⌥⇧↩
+Balance window sizes       ⌥⇧\
+Reset workspace layout     ⌥⇧; then r
+Toggle floating / tiling   ⌥⇧; then f
+Toggle fullscreen
+Close focused window
+Go to workspace 2          Google Chrome
+Go to workspace 4          Music
+Focus Music                Philip Sayce — Once
+Reload AeroSpace config
+Reload SketchyBar
+```
 
-`launcher.sh --dry-run` prints the menu instead of showing the picker.
+The menu is rebuilt on every invocation, so it reflects current state: Focus
+reads on or off with the live mode name, only *open* scenes offer a Close, only
+*occupied* workspaces are listed and they're labelled with the apps on them.
+
+### Keeping it complete
+
+The palette only works as a discovery surface if it stays complete, so **every
+new keybinding or bar button must be registered in
+`config/aerospace/launcher.sh`**, and removed ones must be deregistered:
+
+```bash
+add "<label>" "<detail: its keybinding>" "<command>"
+```
+
+Two tools enforce and inspect this:
+
+```sh
+bin/check-launcher.sh      # fails if a binding or bar button has no entry
+launcher.sh --dry-run      # print the menu without a GUI
+```
+
+`CLAUDE.md` carries the full contract, including for AI sessions working here.
 
 ## Scenes
 
