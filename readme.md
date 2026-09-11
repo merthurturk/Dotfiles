@@ -149,6 +149,11 @@ rediscovered:
 - **`[exec]` must be the last table in `aerospace.toml`** — a TOML table captures
   every key after it. It sets `PATH` so bindings can find Homebrew binaries,
   since GUI apps launched at login inherit a bare launchd `PATH`.
+- **An empty workspace can't hold focus.** `open -a` activates the app, which
+  moves focus; with no window on the workspace AeroSpace falls back to the
+  previously focused window, so new windows are born on the *old* workspace.
+  `scene.sh` therefore opens windows wherever they land and moves them by
+  window id, rather than switching first and trusting focus to stay.
 - **MediaRemote was restricted in macOS 15.4**, so SketchyBar's `media_change`
   event is unreliable; the now-playing chip uses AppleScript.
 - No `/Users/<name>` or `/opt/homebrew` paths in the configs — `$HOME` and the

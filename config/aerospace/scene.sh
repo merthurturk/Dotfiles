@@ -47,17 +47,20 @@ if [ -z "$WS" ]; then
   echo "scene: no empty workspace available" >&2
   exit 1
 fi
-$AEROSPACE workspace "$WS"
-sleep 0.3
 
-# Waits for a window to appear on the focused workspace that wasn't in $1.
+# Note we do NOT switch to $WS first. `open -a` activates Chrome, which moves
+# focus; an empty workspace has no window to hold focus, so AeroSpace falls
+# back to the previously focused window and the new windows are born on *that*
+# workspace instead. So let them open wherever they land and move them by id.
+
+# Waits for a window to appear anywhere that wasn't in $1.
 wait_new_window() {
   local before="$1" new=""
   local i
   for i in $(seq 1 60); do
     sleep 0.25
     new="$(comm -13 <(printf '%s\n' "$before") \
-                    <($AEROSPACE list-windows --workspace focused --format '%{window-id}' | sort) \
+                    <($AEROSPACE list-windows --all --format '%{window-id}' | sort) \
            | head -1)"
     [ -n "$new" ] && break
   done
@@ -83,6 +86,12 @@ if [ -z "$SIDE_WID" ]; then
   echo "scene: side window never appeared" >&2
   exit 1
 fi
+
+# Move main first so it ends up on the left, then reveal the workspace.
+$AEROSPACE move-node-to-workspace --window-id "$MAIN_WID" "$WS"
+$AEROSPACE move-node-to-workspace --window-id "$SIDE_WID" "$WS"
+$AEROSPACE workspace "$WS"
+sleep 0.4
 
 split_resize "$MAIN_WID" "$RATIO"
 $AEROSPACE focus --window-id "$MAIN_WID" 2>/dev/null || true
