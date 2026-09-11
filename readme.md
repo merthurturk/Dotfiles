@@ -2,8 +2,8 @@
 
 macOS setup: [AeroSpace](https://nikitabobko.github.io/AeroSpace/) tiling driving
 [SketchyBar](https://felixkratz.github.io/SketchyBar/), themed
-[Catppuccin Latte](https://github.com/catppuccin/catppuccin) (light), plus
-Ghostty.
+[Catppuccin Latte](https://github.com/catppuccin/catppuccin) (light). Ghostty
+uses the same palette, so terminal and bar are one surface.
 
 ## Install on a new Mac
 

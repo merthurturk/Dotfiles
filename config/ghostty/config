@@ -1,5 +1,19 @@
-# theme = Github Light High Contrast
-theme = Github Dark
+# Theme — Catppuccin Latte, the same palette as the sketchybar config:
+# its background (#eff1f5) and foreground (#4c4f69) match colors.sh exactly.
+theme = Catppuccin Latte
+
+# Draw the titlebar in the terminal's own colours rather than following the
+# system appearance, so the whole window reads as one light surface.
+window-theme = ghostty
+
+# Accent tie-in: blue is the focused workspace pill in the bar and the
+# selected row in the picker. Latte's own cursor is rosewater, which reads as
+# unrelated next to the bar.
+cursor-color = #1e66f5
+
+# Divider matches the bar's border colour.
+split-divider-color = #bcc0cc
+unfocused-split-opacity = 0.92
 
 # Font
 font-family = Berkeley Mono
@@ -8,6 +22,7 @@ font-size = 13
 # Window
 window-padding-x = 10
 window-padding-y = 10
+window-padding-balance = true
 window-decoration = true
 macos-titlebar-style = tabs
 
