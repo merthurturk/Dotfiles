@@ -16,7 +16,12 @@ split-divider-color = #bcc0cc
 unfocused-split-opacity = 0.92
 
 # Font
+# Each Berkeley Mono weight installs as a separate family, so bold and italic
+# have to be named explicitly -- otherwise Ghostty synthesises them.
 font-family = Berkeley Mono
+font-family-bold = Berkeley Mono Bold SemiCondensed
+font-family-italic = Berkeley Mono SemiCondensed Oblique
+font-family-bold-italic = Berkeley Mono Bold SemiCondensed Oblique
 font-size = 13
 
 # Window

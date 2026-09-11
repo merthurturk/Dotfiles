@@ -56,6 +56,25 @@ alt-shift-g = 'exec-and-forget $HOME/.config/aerospace/chrome-split.sh 0.6 "Relo
 
 Passing a profile name skips the picker.
 
+## Fonts
+
+All **text** is Berkeley Mono — terminal, bar labels, picker. Hack Nerd Font is
+used only for **icon glyphs** (battery, volume, clock, focus, music), because
+Berkeley Mono carries no Nerd Font glyphs.
+
+Berkeley Mono is commercial and cannot ship here. Install it from your
+[Berkeley Graphics](https://berkeleygraphics.com/) account on a new machine;
+until then everything falls back to Hack Nerd Font automatically.
+
+Two traps worth remembering:
+
+- Each Berkeley Mono weight installs as its **own family** with style
+  `Regular`. Asking sketchybar for `Berkeley Mono:Bold:13.0` silently falls back
+  to the system font — it looks fine but renders no Berkeley at all. Weight must
+  be chosen by family name: `Berkeley Mono Bold SemiCondensed:Regular`.
+- For the same reason Ghostty needs `font-family-bold` / `font-family-italic`
+  named explicitly, or it synthesises them.
+
 ## The picker
 
 `config/aerospace/src/picker.swift` compiles to a standalone chooser:

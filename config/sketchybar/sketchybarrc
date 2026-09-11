@@ -13,8 +13,27 @@ export CONFIG_DIR="$HOME/.config/sketchybar"
 PLUGIN_DIR="$CONFIG_DIR/plugins"
 source "$CONFIG_DIR/colors.sh"
 
-FONT="Hack Nerd Font"
-APP_FONT="sketchybar-app-font:Regular:16.0"
+##### Fonts #####
+# Text is Berkeley Mono so the bar matches the terminal; icons stay Hack Nerd
+# Font because Berkeley Mono carries no Nerd Font glyphs.
+#
+# Every Berkeley Mono weight installs as its own *family* with style "Regular",
+# so weight is selected by family name. Asking for ":Bold:" silently falls back
+# to the system font -- it looks like it worked but renders nothing of Berkeley.
+if [ "$(osascript -l JavaScript -e 'ObjC.import("AppKit"); $.NSFont.fontWithNameSize($("BerkeleyMono-SemiCondensed"), 12).isNil() ? "no" : "yes"' 2>/dev/null)" = "yes" ]; then
+  FONT_REGULAR="Berkeley Mono SemiCondensed:Regular"
+  FONT_MEDIUM="Berkeley Mono SemiBold SemiCondensed:Regular"
+  FONT_BOLD="Berkeley Mono Bold SemiCondensed:Regular"
+else
+  # Berkeley Mono is a commercial font and can't ship in this repo; fall back
+  # to Hack so a fresh machine still looks right before it's installed.
+  FONT_REGULAR="Hack Nerd Font:Regular"
+  FONT_MEDIUM="Hack Nerd Font:Semibold"
+  FONT_BOLD="Hack Nerd Font:Bold"
+fi
+
+ICON_FONT="Hack Nerd Font"                    # glyphs only, never text
+APP_FONT="sketchybar-app-font:Regular:16.0"   # per-app glyphs in workspace pills
 
 ##### Geometry #####
 # macOS 26 draws window corners as squircles, not circles -- fitting the arc of
@@ -61,8 +80,8 @@ sketchybar --bar height=$BAR_HEIGHT \
 default=(
   padding_left=$ITEM_PADDING
   padding_right=$ITEM_PADDING
-  icon.font="$FONT:Bold:15.0"
-  label.font="$FONT:Semibold:13.0"
+  icon.font="$ICON_FONT:Bold:15.0"
+  label.font="$FONT_MEDIUM:13.0"
   icon.color="$TEXT"
   label.color="$TEXT"
   icon.padding_left=6
@@ -84,6 +103,7 @@ for ws in $(aerospace list-workspaces --all); do
   sketchybar --add item space."$ws" left \
              --set space."$ws" \
                    icon="$ws" \
+                   icon.font="$FONT_BOLD:14.0" \
                    icon.padding_left=9 \
                    icon.padding_right=5 \
                    label.font="$APP_FONT" \
@@ -111,7 +131,7 @@ sketchybar --add item aerospace_mode left \
                  icon="󰘳" \
                  icon.color="$BASE" \
                  label.color="$BASE" \
-                 label.font="$FONT:Bold:12.0" \
+                 label.font="$FONT_BOLD:12.0" \
                  background.color="$MAROON" \
                  background.border_color="$MAROON"
 
@@ -120,7 +140,7 @@ sketchybar --add item aerospace_mode left \
 sketchybar --add item separator left \
            --set separator icon="│" \
                  icon.color="$SURFACE2" \
-                 icon.font="$FONT:Regular:14.0" \
+                 icon.font="$FONT_REGULAR:14.0" \
                  label.drawing=off \
                  padding_left=6 \
                  padding_right=6
@@ -128,7 +148,7 @@ sketchybar --add item separator left \
 sketchybar --add item front_app left \
            --set front_app icon.font="$APP_FONT" \
                  icon.color="$MAUVE" \
-                 label.font="$FONT:Bold:13.0" \
+                 label.font="$FONT_BOLD:13.0" \
                  label.color="$TEXT" \
                  script="$PLUGIN_DIR/front_app.sh" \
            --subscribe front_app front_app_switched
@@ -140,7 +160,7 @@ sketchybar --add event focus_change
 
 sketchybar --add item focus right \
            --set focus update_freq=5 \
-                 label.font="$FONT:Bold:13.0" \
+                 label.font="$FONT_BOLD:13.0" \
                  icon.padding_left=9 \
                  icon.padding_right=9 \
                  script="$PLUGIN_DIR/focus.sh" \
@@ -151,7 +171,7 @@ sketchybar --add item clock right \
            --set clock update_freq=15 \
                  icon="󰅐" \
                  icon.color="$MAUVE" \
-                 label.font="$FONT:Bold:13.0" \
+                 label.font="$FONT_BOLD:13.0" \
                  script="$PLUGIN_DIR/clock.sh" \
            --add item battery right \
            --set battery update_freq=120 \

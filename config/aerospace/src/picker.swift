@@ -24,6 +24,16 @@ let cSurface  = hex(0xccd0da)
 let cBlue     = hex(0x1e66f5)
 let cOverlay  = hex(0x9ca0b0)
 
+// Text font: Berkeley Mono, matching the bar and terminal. Selected by
+// PostScript name because every weight installs as its own family. Falls back
+// to the system font when Berkeley Mono isn't installed -- it's a commercial
+// font and can't ship in the dotfiles repo.
+func uiFont(_ size: CGFloat, bold: Bool = false) -> NSFont {
+    let ps = bold ? "BerkeleyMono-BoldSemiCondensed" : "BerkeleyMono-SemiCondensed"
+    return NSFont(name: ps, size: size)
+        ?? .systemFont(ofSize: size, weight: bold ? .semibold : .regular)
+}
+
 let OUTER_RADIUS: CGFloat = 16
 let ROW_INSET: CGFloat    = 8
 let ROW_RADIUS            = OUTER_RADIUS - ROW_INSET   // concentric
@@ -83,7 +93,7 @@ final class RowView: NSView {
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = ROW_RADIUS
-        label.font = .systemFont(ofSize: 14, weight: .medium)
+        label.font = uiFont(14)
         label.translatesAutoresizingMaskIntoConstraints = false
         addSubview(label)
         NSLayoutConstraint.activate([
@@ -129,7 +139,7 @@ final class Picker: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         panel.contentView = bg
 
         field.placeholderString = promptText
-        field.font = .systemFont(ofSize: 18, weight: .regular)
+        field.font = uiFont(18)
         field.textColor = cText
         field.isBordered = false
         field.drawsBackground = false
