@@ -1,8 +1,9 @@
 {
   "chill": {
     "icon": "󰅶",
+    "label": "chill",
     "badge": "PEACH",
-    "ratio": 0.70,
+    "ratio": 0.7,
     "windows": [
       "chrome:https://www.youtube.com https://x.com https://www.instagram.com",
       "chrome-app:https://app.contextengine.com/chat"
@@ -10,8 +11,9 @@
   },
   "messaging": {
     "icon": "󰭹",
+    "label": "chat",
     "badge": "TEAL",
-    "ratio": 0.50,
+    "ratio": 0.5,
     "windows": [
       "app:WhatsApp",
       "app:Telegram"

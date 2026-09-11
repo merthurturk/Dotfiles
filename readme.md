@@ -147,8 +147,17 @@ A scene is a list of window specs, left to right:
 
 A workspace running a scene shows the scene's **badge** — its glyph and name in
 its own colour — instead of the usual app icons, because "chill" says more than
-three browser glyphs do. Set `icon` and `badge` per scene; badges are defined in
-`config/sketchybar/colors.sh`.
+three browser glyphs do.
+
+| Field | Purpose |
+|---|---|
+| `icon` | Nerd Font glyph shown in the pill |
+| `label` | Short name for the bar; defaults to the scene's key |
+| `badge` | `PEACH`, `TEAL`, `MAUVE`, `BLUE` or `GREEN` from `colors.sh` |
+
+`label` matters more than it looks: the pill's width is almost entirely its text,
+so `messaging` → `chat` took that pill from 107pt to 73pt and brought it back
+into line with the app-icon pills.
 
 | Spec | Opens |
 |---|---|

@@ -39,8 +39,11 @@ scene_badge() {
   [ -f "$SCENES_STATE" ] || return 1
   name="$(awk -F'\t' -v w="$ws" '$1 == w { print $2; exit }' "$SCENES_STATE")"
   [ -n "$name" ] || return 1
+  # `label` lets a scene show a shorter name in the bar than its key.
   jq -r --arg s "$name" '
-    if has($s) then "\(.[$s].icon // "")\t\($s)\t\(.[$s].badge // "BLUE")" else empty end
+    if has($s)
+    then "\(.[$s].icon // "")\t\(.[$s].label // $s)\t\(.[$s].badge // "BLUE")"
+    else empty end
   ' "$SCENES_JSON" 2>/dev/null
 }
 
@@ -57,18 +60,24 @@ while read -r ws; do
     # Indirect lookup of BADGE_<NAME>_TINT / _DEEP from colors.sh, falling
     # back to the ordinary pill colours for an unknown badge name.
     tint="$WS_OCCUPIED_BG"
+    edge="$WS_OCCUPIED_BORDER"
     deep="$WS_OCCUPIED_FG"
     eval "tint=\${BADGE_${badge}_TINT:-$tint}"
+    eval "edge=\${BADGE_${badge}_EDGE:-$edge}"
     eval "deep=\${BADGE_${badge}_DEEP:-$deep}"
 
+    # Medium weight, a size down from the workspace number: the name is
+    # secondary information and bold 13 made these pills shout next to the
+    # compact app-icon ones.
     label="$glyph $sname"
-    label_font="$FONT_BOLD:13.0"
+    label_font="$FONT_MEDIUM:12.0"
+    label_pad_left=2      # the number and the badge belong together
     draw=on
     label_draw=on
     if [ "$ws" = "$FOCUSED" ]; then
       bg="$deep"; fg="$BASE"; bd="$deep"
     else
-      bg="$tint"; fg="$deep"; bd="$deep"
+      bg="$tint"; fg="$deep"; bd="$edge"
     fi
   else
     icons=""
@@ -82,6 +91,7 @@ while read -r ws; do
 
     label="$icons"
     label_font="$APP_FONT"
+    label_pad_left=4
     [ -n "$icons" ] && label_draw=on || label_draw=off
 
     if [ "$ws" = "$FOCUSED" ]; then
@@ -101,6 +111,7 @@ while read -r ws; do
     label.color="$fg"
     label="$label"
     label.font="$label_font"
+    label.padding_left="$label_pad_left"
     label.drawing="$label_draw"
   )
 done < <(aerospace list-workspaces --all)
