@@ -26,27 +26,28 @@ sketchybar --trigger aerospace_workspace_change 2>/dev/null
 
 # --no-send-initial: we repainted above, and don't want a burst of synthetic
 # events replaying old state.
+# One long-lived jq reformats the whole stream into "<event>\t<workspace>".
+# Parsing each line with its own jq meant a process spawn per event, on a path
+# that fires every time focus moves.
 aerospace subscribe --no-send-initial \
     focused-workspace-changed window-detected focus-changed mode-changed \
-  2>>"$LOG" | while IFS= read -r line; do
-
-  event="$(printf '%s' "$line" | jq -r '._event // empty' 2>/dev/null)"
-  [ -n "$event" ] || continue
-
-  case "$event" in
-    mode-changed)
-      mode="$(printf '%s' "$line" | jq -r '.mode // "main"' 2>/dev/null)"
-      "$HOME/.config/sketchybar/plugins/mode.sh" "$mode"
-      ;;
-    *)
-      ws="$(printf '%s' "$line" | jq -r '.workspace // empty' 2>/dev/null)"
-      if [ -n "$ws" ]; then
-        sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE="$ws"
-      else
-        sketchybar --trigger aerospace_workspace_change
-      fi
-      ;;
-  esac
-done
+    2>>"$LOG" \
+  | jq -r --unbuffered '[._event, (.workspace // ""), (.mode // "")] | @tsv' \
+    2>>"$LOG" \
+  | while IFS=$'\t' read -r event ws mode; do
+      [ -n "$event" ] || continue
+      case "$event" in
+        mode-changed)
+          "$HOME/.config/sketchybar/plugins/mode.sh" "${mode:-main}"
+          ;;
+        *)
+          if [ -n "$ws" ]; then
+            sketchybar --trigger aerospace_workspace_change FOCUSED_WORKSPACE="$ws"
+          else
+            sketchybar --trigger aerospace_workspace_change
+          fi
+          ;;
+      esac
+    done
 
 log "event stream ended (aerospace restarted or stopped); launchd will respawn"

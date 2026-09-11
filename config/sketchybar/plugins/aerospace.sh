@@ -4,15 +4,17 @@
 #
 # A workspace is drawn only when it holds windows or is the focused one, so the
 # 31 persistent workspaces declared in ~/.aerospace.toml stay out of the way
-# until you actually use them.
+# until you actually use them. A workspace hosting a scene shows the scene's
+# badge -- its glyph and name in its own colour -- instead of app icons.
 #
-# A workspace hosting a scene shows the scene's own badge -- its glyph and name
-# in the scene's colour -- instead of the usual app icons, since "chill" says
-# more than three browser glyphs do.
+# This runs on every workspace switch, so it is deliberately subprocess-frugal.
+# Everything is gathered once, then a single awk pass emits the whole sketchybar
+# argument list. An earlier version looped in shell, forking awk and sort per
+# workspace: ~70 processes and 270ms, which reads as lag when you switch.
 #
 # macOS ships bash 3.2, which has no associative arrays -- string subscripts
 # silently collapse to index 0 there, which would merge every letter workspace
-# into one bucket. Windows are grouped with awk instead.
+# into one bucket. All grouping happens in awk.
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
@@ -28,93 +30,101 @@ if [ "$SENDER" = "mouse.entered" ]; then
 fi
 
 FOCUSED="${FOCUSED_WORKSPACE:-$(aerospace list-workspaces --focused)}"
-WINDOWS="$(aerospace list-windows --monitor all --format '%{workspace}|%{app-name}')"
-
 SCENES_STATE="${XDG_STATE_HOME:-$HOME/.local/state}/aerospace/scenes"
 SCENES_JSON="$HOME/.config/aerospace/scenes.json"
 
-# Returns "<glyph>\t<name>\t<BADGE>" for a workspace running a scene.
-scene_badge() {
-  local ws="$1" name
-  [ -f "$SCENES_STATE" ] || return 1
-  name="$(awk -F'\t' -v w="$ws" '$1 == w { print $2; exit }' "$SCENES_STATE")"
-  [ -n "$name" ] || return 1
-  # `label` lets a scene show a shorter name in the bar than its key.
-  jq -r --arg s "$name" '
-    if has($s)
-    then "\(.[$s].icon // "")\t\(.[$s].label // $s)\t\(.[$s].badge // "BLUE")"
-    else empty end
-  ' "$SCENES_JSON" 2>/dev/null
-}
+# --- gather once ----------------------------------------------------------
+
+WINDOWS="$(aerospace list-windows --monitor all --format '%{workspace}|%{app-name}' | sort -u)"
+WORKSPACES="$(aerospace list-workspaces --all)"
+
+# __icon_map is a shell function, so awk can't call it. Resolve the handful of
+# distinct apps here; everything else is awk's job.
+APP_GLYPHS=""
+while IFS= read -r app; do
+  [ -n "$app" ] || continue
+  __icon_map "$app"
+  # icon_result is set by __icon_map, in the sourced icon_map.sh
+  # shellcheck disable=SC2154
+  APP_GLYPHS="${APP_GLYPHS}G	${app}	${icon_result}
+"
+done < <(printf '%s\n' "$WINDOWS" | cut -d'|' -f2- | sort -u)
+
+SCENE_DEFS=""
+[ -f "$SCENES_JSON" ] && SCENE_DEFS="$(jq -r '
+  to_entries[] | ["D", .key, (.value.icon // ""), (.value.label // .key),
+                  (.value.badge // "BLUE")] | @tsv' "$SCENES_JSON" 2>/dev/null)"
+
+SCENE_STATE=""
+[ -f "$SCENES_STATE" ] && SCENE_STATE="$(sed 's/^/S\t/' "$SCENES_STATE")"
+
+# "NAME=tint,edge,deep;…" so awk can look a badge up instead of forking.
+BADGES=""
+for b in PEACH TEAL MAUVE BLUE GREEN; do
+  t=""; e=""; d=""
+  eval "t=\${BADGE_${b}_TINT:-}"
+  eval "e=\${BADGE_${b}_EDGE:-}"
+  eval "d=\${BADGE_${b}_DEEP:-}"
+  [ -n "$t" ] && BADGES="${BADGES}${b}=${t},${e},${d};"
+done
+
+# --- one pass -------------------------------------------------------------
 
 args=()
-while read -r ws; do
-  [ -z "$ws" ] && continue
+while IFS= read -r a; do args+=("$a"); done < <(
+  { printf '%s\n' "$APP_GLYPHS"
+    printf '%s\n' "$SCENE_DEFS"
+    printf '%s\n' "$SCENE_STATE"
+    printf '%s\n' "$WINDOWS" | sed 's/^/W\t/;s/|/\t/'
+    printf '%s\n' "$WORKSPACES" | sed 's/^/L\t/'
+  } | awk -F'\t' \
+      -v focused="$FOCUSED" -v badges="$BADGES" \
+      -v app_font="$APP_FONT" -v scene_font="$FONT_MEDIUM:12.0" \
+      -v a_bg="$WS_ACTIVE_BG" -v a_fg="$WS_ACTIVE_FG" -v a_bd="$WS_ACTIVE_BORDER" \
+      -v o_bg="$WS_OCCUPIED_BG" -v o_fg="$WS_OCCUPIED_FG" -v o_bd="$WS_OCCUPIED_BORDER" \
+      -v clear="$TRANSPARENT" -v dim="$OVERLAY0" -v base="$BASE" '
+    BEGIN {
+      n = split(badges, bs, ";")
+      for (i = 1; i <= n; i++) {
+        if (bs[i] == "") continue
+        split(bs[i], kv, "="); split(kv[2], c, ",")
+        tint[kv[1]] = c[1]; edge[kv[1]] = c[2]; deep[kv[1]] = c[3]
+      }
+    }
+    $1 == "G" { glyph[$2] = $3; next }
+    $1 == "D" { sIcon[$2] = $3; sLabel[$2] = $4; sBadge[$2] = $5; next }
+    $1 == "S" { wsScene[$2] = $3; next }
+    $1 == "W" { icons[$2] = icons[$2] glyph[$3]; next }
 
-  scene="$(scene_badge "$ws")"
+    $1 == "L" {
+      ws = $2
+      if (ws in wsScene) {
+        s  = wsScene[ws]; b = (s in sBadge) ? sBadge[s] : "BLUE"
+        tt = (b in tint) ? tint[b] : o_bg
+        ee = (b in edge) ? edge[b] : o_bd
+        dd = (b in deep) ? deep[b] : o_fg
+        label = sIcon[s] " " sLabel[s]
+        font = scene_font; pad = 2; draw = "on"; ldraw = "on"
+        if (ws == focused) { bg = dd; fg = base; bd = dd }
+        else               { bg = tt; fg = dd;   bd = ee }
+      } else {
+        label = icons[ws]; font = app_font; pad = 4
+        ldraw = (label == "") ? "off" : "on"
+        if (ws == focused)   { bg = a_bg; fg = a_fg; bd = a_bd; draw = "on" }
+        else if (label != "") { bg = o_bg; fg = o_fg; bd = o_bd; draw = "on" }
+        else                  { bg = clear; fg = dim; bd = clear; draw = "off" }
+      }
+      print "--set"; print "space." ws
+      print "drawing=" draw
+      print "background.color=" bg
+      print "background.border_color=" bd
+      print "icon.color=" fg
+      print "label.color=" fg
+      print "label=" label
+      print "label.font=" font
+      print "label.padding_left=" pad
+      print "label.drawing=" ldraw
+    }'
+)
 
-  if [ -n "$scene" ]; then
-    glyph="$(printf '%s' "$scene" | cut -f1)"
-    sname="$(printf '%s' "$scene" | cut -f2)"
-    badge="$(printf '%s' "$scene" | cut -f3)"
-    # Indirect lookup of BADGE_<NAME>_TINT / _DEEP from colors.sh, falling
-    # back to the ordinary pill colours for an unknown badge name.
-    tint="$WS_OCCUPIED_BG"
-    edge="$WS_OCCUPIED_BORDER"
-    deep="$WS_OCCUPIED_FG"
-    eval "tint=\${BADGE_${badge}_TINT:-$tint}"
-    eval "edge=\${BADGE_${badge}_EDGE:-$edge}"
-    eval "deep=\${BADGE_${badge}_DEEP:-$deep}"
-
-    # Medium weight, a size down from the workspace number: the name is
-    # secondary information and bold 13 made these pills shout next to the
-    # compact app-icon ones.
-    label="$glyph $sname"
-    label_font="$FONT_MEDIUM:12.0"
-    label_pad_left=2      # the number and the badge belong together
-    draw=on
-    label_draw=on
-    if [ "$ws" = "$FOCUSED" ]; then
-      bg="$deep"; fg="$BASE"; bd="$deep"
-    else
-      bg="$tint"; fg="$deep"; bd="$edge"
-    fi
-  else
-    icons=""
-    while read -r app; do
-      [ -z "$app" ] && continue
-      __icon_map "$app"
-      # icon_result is set by __icon_map, in the sourced icon_map.sh
-      # shellcheck disable=SC2154
-      icons="${icons}${icon_result}"
-    done < <(printf '%s\n' "$WINDOWS" | awk -F'|' -v w="$ws" '$1 == w { print $2 }' | sort -u)
-
-    label="$icons"
-    label_font="$APP_FONT"
-    label_pad_left=4
-    [ -n "$icons" ] && label_draw=on || label_draw=off
-
-    if [ "$ws" = "$FOCUSED" ]; then
-      bg=$WS_ACTIVE_BG fg=$WS_ACTIVE_FG bd=$WS_ACTIVE_BORDER draw=on
-    elif [ -n "$icons" ]; then
-      bg=$WS_OCCUPIED_BG fg=$WS_OCCUPIED_FG bd=$WS_OCCUPIED_BORDER draw=on
-    else
-      bg=$TRANSPARENT fg=$OVERLAY0 bd=$TRANSPARENT draw=off
-    fi
-  fi
-
-  args+=(--set space."$ws"
-    drawing="$draw"
-    background.color="$bg"
-    background.border_color="$bd"
-    icon.color="$fg"
-    label.color="$fg"
-    label="$label"
-    label.font="$label_font"
-    label.padding_left="$label_pad_left"
-    label.drawing="$label_draw"
-  )
-done < <(aerospace list-workspaces --all)
-
-# Animate so the highlight eases between pills instead of snapping.
-sketchybar --animate sin 12 "${args[@]}"
+sketchybar --animate sin 8 "${args[@]}"

@@ -26,6 +26,15 @@ every `space.*` pill in **one** batched `sketchybar --set` call, from a single
 It runs on `aerospace_workspace_change` (fired by the event bridge),
 `front_app_switched`, `space_windows_change`, `display_change`, and a 5s poll.
 
+**It is on the latency path for every workspace switch**, so it is deliberately
+subprocess-frugal: everything is gathered once and a single `awk` pass emits the
+entire argument list. Keep it that way — an earlier version looped in shell and
+forked `awk` plus `sort` per workspace, costing 270ms of visible lag.
+
+`fonts.sh` is cached for the same reason: its Berkeley Mono presence check asks
+AppKit and costs ~70ms. `sketchybarrc` clears the cache on reload so a newly
+installed font is still picked up.
+
 ## Geometry is derived, not hardcoded
 
 ```

@@ -48,6 +48,10 @@ backstop, not the mechanism.
 The agent runs under launchd with `KeepAlive`, because the event stream ends
 whenever AeroSpace restarts.
 
+It pipes the stream through **one long-lived `jq`** rather than parsing each
+line with its own; `focus-changed` fires constantly, and a process spawn per
+event is not free.
+
 ## State, and who writes it
 
 Everything lives in `~/.local/state/aerospace/` — none of it is in the repo.
@@ -60,6 +64,7 @@ Everything lives in `~/.local/state/aerospace/` — none of it is in the repo.
 | `log` | `logging.sh` | you, `doctor` |
 | `audit.log` | `dot` capabilities | you |
 | `picker-*.history` | the picker | the picker (frecency) |
+| `fonts` | `fonts.sh` | every plugin that sets a font (a ~70ms probe, cached) |
 
 `focus` deserves a note: **only SketchyBar has Full Disk Access**, so it is the
 only process that can read the TCC-protected Focus database. It publishes what
