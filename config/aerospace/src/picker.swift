@@ -5,9 +5,12 @@ import AppKit
 //   picker [file]          items from <file>, or from stdin when omitted
 //   PICKER_PROMPT=...      placeholder text in the search field
 //
-// Prints the chosen line to stdout and exits 0; exits 1 when cancelled.
+// Each input line is "label" or "label<TAB>detail"; the detail is shown dimmed
+// on the right and is searchable along with the label.
+//
+// Prints the chosen line's label to stdout and exits 0; exits 1 when cancelled.
 // Styling follows the sketchybar bar: Catppuccin Latte, 16pt outer radius with
-// concentric 8pt rows.
+// concentric 8pt rows, Berkeley Mono text.
 
 // MARK: - Palette (Catppuccin Latte)
 
@@ -17,17 +20,17 @@ func hex(_ v: UInt32, _ a: CGFloat = 1) -> NSColor {
             blue:    CGFloat(v & 0xff) / 255,
             alpha:   a)
 }
-let cBase     = hex(0xeff1f5)
-let cText     = hex(0x4c4f69)
-let cSubtext  = hex(0x6c6f85)
-let cSurface  = hex(0xccd0da)
-let cBlue     = hex(0x1e66f5)
-let cOverlay  = hex(0x9ca0b0)
+let cBase    = hex(0xeff1f5)
+let cMantle  = hex(0xe6e9ef)
+let cText    = hex(0x4c4f69)
+let cSubtext = hex(0x6c6f85)
+let cSurface = hex(0xccd0da)
+let cBlue    = hex(0x1e66f5)
+let cOverlay = hex(0x9ca0b0)
 
-// Text font: Berkeley Mono, matching the bar and terminal. Selected by
-// PostScript name because every weight installs as its own family. Falls back
-// to the system font when Berkeley Mono isn't installed -- it's a commercial
-// font and can't ship in the dotfiles repo.
+// Text font matches the bar and terminal. Berkeley Mono installs each weight as
+// its own family, so it's selected by PostScript name; falls back to the system
+// font since Berkeley Mono is commercial and can't ship in the repo.
 func uiFont(_ size: CGFloat, bold: Bool = false) -> NSFont {
     let ps = bold ? "BerkeleyMono-BoldSemiCondensed" : "BerkeleyMono-SemiCondensed"
     return NSFont(name: ps, size: size)
@@ -37,21 +40,35 @@ func uiFont(_ size: CGFloat, bold: Bool = false) -> NSFont {
 let OUTER_RADIUS: CGFloat = 16
 let ROW_INSET: CGFloat    = 8
 let ROW_RADIUS            = OUTER_RADIUS - ROW_INSET   // concentric
-let ROW_H: CGFloat        = 34
-let FIELD_H: CGFloat      = 52
-let WIDTH: CGFloat        = 520
+let ROW_H: CGFloat        = 36
+let FIELD_H: CGFloat      = 50
+let FOOTER_H: CGFloat     = 30
+let WIDTH: CGFloat        = 540
 let MAX_ROWS              = 8
 
 // MARK: - Input
 
-var items: [String] = []
+struct Item { let label: String; let detail: String }
+
+var items: [Item] = []
+func ingest(_ lines: [String]) {
+    for raw in lines {
+        let line = raw.trimmingCharacters(in: .whitespaces)
+        if line.isEmpty { continue }
+        let parts = raw.components(separatedBy: "\t")
+        items.append(Item(label: parts[0].trimmingCharacters(in: .whitespaces),
+                          detail: parts.count > 1
+                              ? parts[1].trimmingCharacters(in: .whitespaces) : ""))
+    }
+}
 if CommandLine.arguments.count > 1,
    let body = try? String(contentsOfFile: CommandLine.arguments[1], encoding: .utf8) {
-    items = body.components(separatedBy: "\n")
+    ingest(body.components(separatedBy: "\n"))
 } else {
-    while let line = readLine(strippingNewline: true) { items.append(line) }
+    var lines: [String] = []
+    while let l = readLine(strippingNewline: true) { lines.append(l) }
+    ingest(lines)
 }
-items = items.filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
 if items.isEmpty { exit(1) }
 
 let promptText = ProcessInfo.processInfo.environment["PICKER_PROMPT"] ?? "Select"
@@ -65,8 +82,7 @@ func score(_ needle: String, _ hay: String) -> Int? {
     var i = 0, total = 0, last = -1
     for (j, ch) in h.enumerated() {
         if i < n.count && ch == n[i] {
-            if last >= 0 { total += j - last - 1 }
-            else { total += j }          // prefer matches near the start
+            total += last >= 0 ? j - last - 1 : j
             last = j
             i += 1
         }
@@ -74,7 +90,7 @@ func score(_ needle: String, _ hay: String) -> Int? {
     return i == n.count ? total : nil
 }
 
-// MARK: - Window
+// MARK: - Views
 
 final class KeyPanel: NSPanel {
     override var canBecomeKey: Bool { true }
@@ -82,24 +98,38 @@ final class KeyPanel: NSPanel {
 }
 
 final class RowView: NSView {
-    let label = NSTextField(labelWithString: "")
+    let label  = NSTextField(labelWithString: "")
+    let detail = NSTextField(labelWithString: "")
+
     var selected = false {
         didSet {
             layer?.backgroundColor = selected ? cBlue.cgColor : NSColor.clear.cgColor
-            label.textColor = selected ? cBase : cText
+            label.textColor  = selected ? cBase : cText
+            detail.textColor = selected ? cBase.withAlphaComponent(0.75) : cOverlay
         }
     }
+
     init() {
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = ROW_RADIUS
-        label.font = uiFont(14)
-        label.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(label)
+
+        label.font  = uiFont(14)
+        detail.font = uiFont(12)
+        detail.alignment = .right
+        detail.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        detail.lineBreakMode = .byTruncatingMiddle
+
+        for v in [label, detail] {
+            v.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(v)
+            v.centerYAnchor.constraint(equalTo: centerYAnchor).isActive = true
+        }
         NSLayoutConstraint.activate([
             label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
-            label.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -14),
-            label.centerYAnchor.constraint(equalTo: centerYAnchor),
+            detail.leadingAnchor.constraint(greaterThanOrEqualTo: label.trailingAnchor,
+                                            constant: 12),
+            detail.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
         ])
     }
     required init?(coder: NSCoder) { fatalError() }
@@ -109,14 +139,14 @@ final class Picker: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     let panel: KeyPanel
     let field = NSTextField()
     let stack = NSStackView()
-    var shown: [String] = items
+    let empty = NSTextField(labelWithString: "No matches")
+    var shown: [Item] = items
     var sel = 0
     var rows: [RowView] = []
     var everBecameKey = false
 
     override init() {
-        let h = FIELD_H + CGFloat(min(items.count, MAX_ROWS)) * ROW_H + ROW_INSET
-        panel = KeyPanel(contentRect: NSRect(x: 0, y: 0, width: WIDTH, height: h),
+        panel = KeyPanel(contentRect: NSRect(x: 0, y: 0, width: WIDTH, height: 200),
                          styleMask: [.borderless],
                          backing: .buffered, defer: false)
         super.init()
@@ -135,45 +165,81 @@ final class Picker: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         bg.layer?.cornerRadius = OUTER_RADIUS
         bg.layer?.borderWidth = 1
         bg.layer?.borderColor = cSurface.cgColor
-        bg.translatesAutoresizingMaskIntoConstraints = false
         panel.contentView = bg
 
+        // --- search row ---
+        let glyph = NSImageView()
+        glyph.image = NSImage(systemSymbolName: "magnifyingglass",
+                              accessibilityDescription: nil)
+        glyph.contentTintColor = cOverlay
+        glyph.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 15,
+                                                                weight: .medium)
+
         field.placeholderString = promptText
-        field.font = uiFont(18)
+        field.font = uiFont(17)
         field.textColor = cText
         field.isBordered = false
         field.drawsBackground = false
         field.focusRingType = .none
         field.delegate = self
-        field.translatesAutoresizingMaskIntoConstraints = false
-        bg.addSubview(field)
+        field.cell?.usesSingleLineMode = true
 
         let rule = NSView()
         rule.wantsLayer = true
         rule.layer?.backgroundColor = cSurface.cgColor
-        rule.translatesAutoresizingMaskIntoConstraints = false
-        bg.addSubview(rule)
 
         stack.orientation = .vertical
-        stack.spacing = 0
-        stack.edgeInsets = NSEdgeInsets(top: 0, left: ROW_INSET, bottom: 0, right: ROW_INSET)
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        bg.addSubview(stack)
+        stack.spacing = 2
+        stack.alignment = .centerX
+
+        empty.font = uiFont(13)
+        empty.textColor = cOverlay
+        empty.isHidden = true
+
+        // --- footer ---
+        let footerBar = NSView()
+        footerBar.wantsLayer = true
+        footerBar.layer?.backgroundColor = cMantle.cgColor
+        let hint = NSTextField(labelWithString: "↑↓ navigate    ↵ select    esc cancel")
+        hint.font = uiFont(11)
+        hint.textColor = cOverlay
+
+        for v in [glyph, field, rule, stack, empty, footerBar, hint] {
+            v.translatesAutoresizingMaskIntoConstraints = false
+        }
+        [glyph, field, rule, stack, empty, footerBar].forEach { bg.addSubview($0) }
+        footerBar.addSubview(hint)
 
         NSLayoutConstraint.activate([
-            field.topAnchor.constraint(equalTo: bg.topAnchor),
-            field.leadingAnchor.constraint(equalTo: bg.leadingAnchor, constant: 20),
-            field.trailingAnchor.constraint(equalTo: bg.trailingAnchor, constant: -20),
-            field.heightAnchor.constraint(equalToConstant: FIELD_H),
+            // Centre the field vertically in its band -- an NSTextField draws
+            // its text at the top of its frame, so filling the band leaves the
+            // placeholder floating above centre.
+            glyph.leadingAnchor.constraint(equalTo: bg.leadingAnchor, constant: 18),
+            glyph.centerYAnchor.constraint(equalTo: bg.topAnchor, constant: FIELD_H / 2),
+            glyph.widthAnchor.constraint(equalToConstant: 18),
 
-            rule.topAnchor.constraint(equalTo: field.bottomAnchor),
+            field.leadingAnchor.constraint(equalTo: glyph.trailingAnchor, constant: 10),
+            field.trailingAnchor.constraint(equalTo: bg.trailingAnchor, constant: -18),
+            field.centerYAnchor.constraint(equalTo: glyph.centerYAnchor),
+
+            rule.topAnchor.constraint(equalTo: bg.topAnchor, constant: FIELD_H),
             rule.leadingAnchor.constraint(equalTo: bg.leadingAnchor),
             rule.trailingAnchor.constraint(equalTo: bg.trailingAnchor),
             rule.heightAnchor.constraint(equalToConstant: 1),
 
-            stack.topAnchor.constraint(equalTo: rule.bottomAnchor, constant: ROW_INSET / 2),
-            stack.leadingAnchor.constraint(equalTo: bg.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: bg.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: rule.bottomAnchor, constant: ROW_INSET),
+            stack.leadingAnchor.constraint(equalTo: bg.leadingAnchor, constant: ROW_INSET),
+            stack.trailingAnchor.constraint(equalTo: bg.trailingAnchor, constant: -ROW_INSET),
+
+            empty.centerXAnchor.constraint(equalTo: bg.centerXAnchor),
+            empty.topAnchor.constraint(equalTo: rule.bottomAnchor, constant: 18),
+
+            footerBar.leadingAnchor.constraint(equalTo: bg.leadingAnchor),
+            footerBar.trailingAnchor.constraint(equalTo: bg.trailingAnchor),
+            footerBar.bottomAnchor.constraint(equalTo: bg.bottomAnchor),
+            footerBar.heightAnchor.constraint(equalToConstant: FOOTER_H),
+            hint.centerYAnchor.constraint(equalTo: footerBar.centerYAnchor),
+            hint.leadingAnchor.constraint(equalTo: footerBar.leadingAnchor, constant: 18),
         ])
 
         rebuild()
@@ -191,29 +257,33 @@ final class Picker: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     }
 
     func rebuild() {
-        rows.forEach { $0.removeFromSuperview() }
+        rows.forEach { stack.removeArrangedSubview($0); $0.removeFromSuperview() }
         rows = []
-        for (i, s) in shown.prefix(MAX_ROWS).enumerated() {
+        for (i, item) in shown.prefix(MAX_ROWS).enumerated() {
             let r = RowView()
-            r.label.stringValue = s
+            r.label.stringValue = item.label
+            r.detail.stringValue = item.detail
             r.selected = (i == sel)
-            r.heightAnchor.constraint(equalToConstant: ROW_H).isActive = true
             stack.addArrangedSubview(r)
-            r.widthAnchor.constraint(equalTo: stack.widthAnchor,
-                                     constant: -2 * ROW_INSET).isActive = true
+            r.heightAnchor.constraint(equalToConstant: ROW_H).isActive = true
+            r.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
             rows.append(r)
         }
+        empty.isHidden = !rows.isEmpty
         resize()
     }
 
     func resize() {
-        let h = FIELD_H + CGFloat(max(rows.count, 1)) * ROW_H + ROW_INSET
+        let listH = rows.isEmpty ? 52
+                                 : CGFloat(rows.count) * ROW_H
+                                   + CGFloat(max(rows.count - 1, 0)) * 2
+        let h = FIELD_H + 1 + ROW_INSET + listH + ROW_INSET + FOOTER_H
         guard let screen = NSScreen.main else { return }
         let v = screen.visibleFrame
-        let frame = NSRect(x: v.midX - WIDTH / 2,
-                           y: v.midY - h / 2 + v.height * 0.12,
-                           width: WIDTH, height: h)
-        panel.setFrame(frame, display: true)
+        panel.setFrame(NSRect(x: v.midX - WIDTH / 2,
+                              y: v.midY - h / 2 + v.height * 0.12,
+                              width: WIDTH, height: h),
+                       display: true)
     }
 
     func highlight() { for (i, r) in rows.enumerated() { r.selected = (i == sel) } }
@@ -229,18 +299,21 @@ final class Picker: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         if q.isEmpty {
             shown = items
         } else {
-            shown = items.compactMap { s in score(q, s).map { ($0, s) } }
-                         .sorted { $0.0 < $1.0 }
-                         .map { $0.1 }
+            shown = items
+                .compactMap { it -> (Int, Item)? in
+                    let hay = it.detail.isEmpty ? it.label : "\(it.label) \(it.detail)"
+                    return score(q, hay).map { ($0, it) }
+                }
+                .sorted { $0.0 < $1.0 }
+                .map { $0.1 }
         }
         sel = 0
         rebuild()
     }
 
     func accept() {
-        guard sel < shown.count else { cancel(); return }
-        FileHandle.standardOutput.write((shown[sel] + "\n").data(using: .utf8)!)
-        NSApp.terminate(nil)
+        guard sel < shown.count, !rows.isEmpty else { cancel(); return }
+        FileHandle.standardOutput.write((shown[sel].label + "\n").data(using: .utf8)!)
         exit(0)
     }
 
@@ -252,6 +325,8 @@ final class Picker: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
         panel.makeFirstResponder(field)
+        // The caret defaults to the system accent colour; tie it to the theme.
+        (field.currentEditor() as? NSTextView)?.insertionPointColor = cBlue
     }
 }
 

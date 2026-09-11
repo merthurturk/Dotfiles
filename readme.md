@@ -85,6 +85,15 @@ reads lines on stdin, prints the choice on stdout:
 ls ~/Projects | PICKER_PROMPT="Open project" ~/.config/aerospace/bin/picker
 ```
 
+Lines may be `label` or `label<TAB>detail`; the detail renders dimmed on the
+right and is matched against as well as the label:
+
+```sh
+printf 'api	go
+web	typescript
+' | ~/.config/aerospace/bin/picker
+```
+
 Rebuild after editing:
 
 ```sh

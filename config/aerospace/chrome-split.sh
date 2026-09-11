@@ -22,11 +22,12 @@ RATIO="${1:-0.6}"
 WANT="${2:-}"
 LOCAL_STATE="$HOME/Library/Application Support/Google/Chrome/Local State"
 
-# "<display name>\t<profile directory>", ordered as Chrome numbers them.
+# "<display name>\t<profile directory>\t<account email>", ordered as Chrome
+# numbers them. The email is shown dimmed in the picker and is searchable.
 PROFILES="$(jq -r '
   .profile.info_cache | to_entries
   | sort_by(.key)[]
-  | "\(.value.name)\t\(.key)"
+  | "\(.value.name)\t\(.key)\t\(.value.user_name // "")"
 ' "$LOCAL_STATE" 2>/dev/null)"
 
 if [ -z "$PROFILES" ]; then
@@ -34,9 +35,10 @@ if [ -z "$PROFILES" ]; then
   exit 1
 fi
 
+# The picker takes "label<TAB>detail" per line.
 NAMES=()
-while IFS=$'\t' read -r name _dir; do
-  [ -n "$name" ] && NAMES+=("$name")
+while IFS=$'\t' read -r name _dir email; do
+  [ -n "$name" ] && NAMES+=("$(printf '%s\t%s' "$name" "$email")")
 done <<EOF
 $PROFILES
 EOF
@@ -49,7 +51,9 @@ elif [ -x "$PICKER" ]; then
   # Native panel: auto-focused, type-to-filter, arrows + enter, esc to cancel.
   CHOICE="$(printf '%s\n' "${NAMES[@]}" | PICKER_PROMPT="Which Chrome profile?" "$PICKER")"
 else
-  # Fallback if the picker hasn't been built.
+  # Fallback if the picker hasn't been built. It has no detail column, so strip
+  # the tab-separated email off each entry.
+  PLAIN=("${NAMES[@]%%$'\t'*}")
   CHOICE="$(osascript -l JavaScript -e '
 function run(argv) {
   var app = Application.currentApplication();
@@ -61,7 +65,7 @@ function run(argv) {
     defaultItems: [argv[0]]
   });
   return picked === false ? "" : picked[0];
-}' "${NAMES[@]}" 2>/dev/null)"
+}' "${PLAIN[@]}" 2>/dev/null)"
 fi
 
 # Cancelled: leave the layout untouched.
