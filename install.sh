@@ -47,6 +47,25 @@ for dir in "$DOTFILES"/config/*/; do
   link "${dir%/}" "$HOME/.config/$(basename "$dir")"
 done
 
+# --- dot on PATH ----------------------------------------------------------
+
+log "Linking dot into ~/.local/bin"
+mkdir -p "$HOME/.local/bin"
+ln -sfn "$DOTFILES/bin/dot" "$HOME/.local/bin/dot"
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) warn "$HOME/.local/bin is not on your PATH; add it so dot works from a shell." ;;
+esac
+
+# --- Theme ----------------------------------------------------------------
+# colors.sh and the Ghostty theme are symlinks into themes/<name>/, so a fresh
+# clone has to pick one before the bar can start.
+
+if [ ! -e "$HOME/.local/state/aerospace/theme" ]; then
+  log "Selecting the default theme"
+  DOT_ROOT="$DOTFILES" "$DOTFILES/libexec/dot/theme-set" catppuccin-latte >/dev/null
+fi
+
 # --- Compiled helpers -----------------------------------------------------
 
 if command -v swiftc >/dev/null 2>&1; then

@@ -84,6 +84,48 @@ Two traps worth remembering:
 - For the same reason Ghostty needs `font-family-bold` / `font-family-italic`
   named explicitly, or it synthesises them.
 
+## `dot` — one command for everything
+
+Every capability of this setup is a `dot` command, and every `dot` command
+describes itself. That descriptor is the single source of truth: the ⌥space
+palette renders from it, `dot help` lists from it, and an agent reads it to
+find out what it can do. Nothing is registered twice.
+
+```sh
+dot                        # what can I do?
+dot scene open chill       dot theme set rose-pine-dawn
+dot scene close 3          dot focus toggle
+dot window split 0.6       dot doctor
+dot capabilities --json    # the whole surface, machine-readable
+```
+
+A descriptor looks like this, and lives next to the code it describes:
+
+```json
+{
+  "id": "scene.close",
+  "summary": "Close every window on a scene's workspace",
+  "destructive": true,
+  "guard": "refuses any workspace the scene script did not open; --force overrides",
+  "verify": "dot scene list --json",
+  "instances": [{"label": "Close scene: chill", "detail": "workspace 3", "args": ["3"]}]
+}
+```
+
+`instances` are what put a capability in the palette — query commands like
+`dot scene list` declare none, because printing JSON into a picker is useless.
+
+### Asking in plain language
+
+```sh
+dot ai "put chrome next to this window and turn on do not disturb"
+```
+
+Claude gets the manifest and is constrained to emitting `dot` commands — no
+arbitrary shell. The plan is shown, destructive steps are flagged, and it asks
+before running. Without a terminal it requires an explicit dialog confirmation
+and **fails closed** on anything else.
+
 ## The command palette — ⌥space
 
 **This is the main entry point.** If you remember one shortcut, remember this
@@ -114,22 +156,16 @@ reads on or off with the live mode name, only *open* scenes offer a Close, only
 
 ### Keeping it complete
 
-The palette only works as a discovery surface if it stays complete, so **every
-new keybinding or bar button must be registered in
-`config/aerospace/launcher.sh`**, and removed ones must be deregistered:
-
-```bash
-add "<label>" "<detail: its keybinding>" "<command>"
-```
-
-Two tools enforce and inspect this:
+It stays complete on its own: the palette *is* the capability list. Adding a
+capability adds a menu entry; removing one removes it. There is nothing to keep
+in sync.
 
 ```sh
-bin/check-launcher.sh      # fails if a binding or bar button has no entry
-launcher.sh --dry-run      # print the menu without a GUI
+dot menu --dry-run           # print the palette without a GUI
+bin/check-capabilities.sh    # every capability describes itself correctly
 ```
 
-`CLAUDE.md` carries the full contract, including for AI sessions working here.
+`CLAUDE.md` and `.claude/skills/dot/` carry the contract for AI sessions.
 
 ## Scenes
 
@@ -240,12 +276,31 @@ away, so anything user-facing sources `config/aerospace/logging.sh`, which
 diverts stderr to `~/.local/state/aerospace/log` — but only when no terminal is
 attached, so running by hand still shows your errors.
 
+## Themes
+
+```sh
+dot theme list
+dot theme set rose-pine-dawn
+```
+
+A theme is a directory under `themes/` holding `colors.sh` (the bar palette),
+`ghostty.conf` (the terminal) and `meta.json`. `config/sketchybar/colors.sh` and
+`config/ghostty/theme.conf` are symlinks into the active one, so the bar and the
+terminal can't drift apart.
+
+Both shipped themes are light. Accents are **darkened from their upstream
+palettes** until white text on them clears 4.5:1 — Latte's peach measures 2.64:1
+as a fill, and Rosé Pine Dawn's gold 2.05:1. Beautiful for syntax highlighting,
+unusable for a chip with a label on it.
+
+Ghostty picks up a theme change on its next config reload (⌘⇧, in a terminal).
+
 ## Development
 
 ```sh
-bin/doctor.sh           # is everything actually working?
-bin/check-launcher.sh   # is every entry point in the palette?
-launcher.sh --dry-run   # print the palette without a GUI
+dot doctor                   # is everything actually working?
+bin/check-capabilities.sh    # every capability describes itself correctly
+dot menu --dry-run           # print the palette without a GUI
 ```
 
 `githooks/pre-commit` runs shell syntax, shellcheck and the launcher check;

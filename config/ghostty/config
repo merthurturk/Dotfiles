@@ -43,3 +43,6 @@ mouse-hide-while-typing = true
 
 # Naming
 shell-integration-features = no-title
+
+# Theme, managed by `dot theme set`. Must be last: later keys win.
+config-file = theme.conf

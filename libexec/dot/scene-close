@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -u
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+
+if [ "${1:-}" = "--describe" ]; then
+  jq -n --argjson instances "$(
+      "$DOT_ROOT/config/aerospace/scene.sh" --open-scenes 2>/dev/null \
+      | jq -R -s --arg kb "$(keysym "$(keybinding 'dot scene close')")" '
+          split("\n") | map(select(length>0)) | map(split("\t")) |
+          map({label: ("Close scene: " + .[1]),
+               detail: ("workspace " + .[0]),
+               args: [.[0]]})')" '
+    {
+      id: "scene.close",
+      summary: "Close every window on a scene'"'"'s workspace",
+      args: [{name: "workspace", required: false},
+             {name: "--force", required: false}],
+      destructive: true,
+      guard: "refuses any workspace the scene script did not open; --force overrides",
+      verify: "dot scene list --json",
+      instances: $instances
+    }'
+  exit 0
+fi
+
+audit "scene close ${*:-}"
+exec "$DOT_ROOT/config/aerospace/scene.sh" close "$@"

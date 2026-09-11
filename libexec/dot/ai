@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+#
+# dot ai "<request>" -- describe what you want; Claude proposes dot commands.
+#
+# Claude is given the capabilities manifest and constrained to emitting `dot`
+# commands, so the blast radius is whatever `dot` can already do -- no arbitrary
+# shell. Proposals are shown and confirmed before anything runs, destructive
+# ones are called out, and everything executed is audited.
+
+set -u
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+
+if [ "${1:-}" = "--describe" ]; then
+  jq -n '{
+    id: "ai",
+    summary: "Ask Claude to change something, in plain language",
+    args: [{name:"request", required:false}, {name:"--yes", required:false}],
+    destructive: false,
+    guard: "proposals are confirmed before running and restricted to dot commands",
+    instances: [{label:"Ask Claude to change something…", detail:"natural language", args:[]}]
+  }'
+  exit 0
+fi
+
+command -v claude >/dev/null 2>&1 || { echo "dot ai: claude CLI not found" >&2; exit 1; }
+
+ASSUME_YES=0
+[ "${1:-}" = "--yes" ] && { ASSUME_YES=1; shift; }
+
+REQUEST="$*"
+if [ -z "$REQUEST" ]; then
+  REQUEST="$(osascript -l JavaScript -e '
+    function run() {
+      var a = Application.currentApplication(); a.includeStandardAdditions = true;
+      a.activate();
+      try {
+        return a.displayDialog("What do you want to change?", {
+          defaultAnswer: "", withTitle: "dot ai", buttons: ["Cancel","Ask"],
+          defaultButton: "Ask"}).textReturned;
+      } catch (e) { return ""; }
+    }' 2>/dev/null)"
+fi
+[ -n "$REQUEST" ] || exit 0
+
+CAPS="$("$DOT_ROOT/bin/dot" capabilities --json)"
+
+PROMPT="You control a macOS tiling setup through a single command, \`dot\`.
+
+Here are every capability and its arguments, as JSON:
+$CAPS
+
+The user asks: $REQUEST
+
+Reply with ONLY the \`dot\` commands to run, one per line, no prose, no code
+fences, no explanation. Use only commands present in the manifest above. If the
+request cannot be satisfied with these commands, reply with exactly: CANNOT"
+
+PLAN="$(claude -p "$PROMPT" 2>/dev/null | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$' | grep -v '^```')"
+
+if [ -z "$PLAN" ] || [ "$PLAN" = "CANNOT" ]; then
+  echo "dot ai: no plan for that. Try 'dot capabilities' to see what's possible." >&2
+  exit 1
+fi
+
+# Refuse anything that isn't a dot command we actually have.
+while IFS= read -r line; do
+  [ -n "$line" ] || continue
+  case "$line" in
+    "dot "*) ;;
+    *) echo "dot ai: refusing non-dot command: $line" >&2; exit 1 ;;
+  esac
+  set -- $line
+  if ! printf '%s' "$CAPS" | jq -e --arg c "$1 $2 $3" --arg c2 "$1 $2" \
+       'map(.command) | index($c) != null or index($c2) != null' >/dev/null; then
+    echo "dot ai: refusing unknown command: $line" >&2; exit 1
+  fi
+done <<EOF
+$PLAN
+EOF
+
+echo "Plan:"
+while IFS= read -r line; do
+  [ -n "$line" ] || continue
+  warn=""
+  printf '%s' "$CAPS" | jq -e --arg l "$line" \
+    'map(select(.destructive == true) | .command) | any(. as $c | $l | startswith($c))' \
+    >/dev/null 2>&1 && warn="   [destructive]"
+  printf '  %s%s\n' "$line" "$warn"
+done <<EOF
+$PLAN
+EOF
+
+if [ "$ASSUME_YES" -eq 0 ]; then
+  if [ -t 0 ]; then
+    printf '\nRun this? [y/N] '; read -r reply
+    case "$reply" in y|Y|yes) ;; *) echo "aborted"; exit 0 ;; esac
+  else
+    # Fail closed. Without a terminal the only valid consent is the dialog
+    # explicitly returning "Run"; anything else -- no GUI, an error, a stray
+    # zero exit -- aborts. An agent path must never run on ambiguity.
+    answer="$(osascript -e "display dialog \"Run this plan?
+
+$PLAN\" buttons {\"Cancel\",\"Run\"} default button \"Cancel\" with title \"dot ai\"" 2>/dev/null)"
+    case "$answer" in
+      *"button returned:Run"*) ;;
+      *) echo "aborted"; exit 0 ;;
+    esac
+  fi
+fi
+
+while IFS= read -r line; do
+  [ -n "$line" ] || continue
+  audit "ai: $line"
+  echo "+ $line"
+  # shellcheck disable=SC2086  # validated against the manifest above
+  DOT_ACTOR=ai ${line/#dot /"$DOT_ROOT/bin/dot" } || echo "  (failed)"
+done <<EOF
+$PLAN
+EOF

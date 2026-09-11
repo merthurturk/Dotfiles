@@ -5,60 +5,55 @@ macOS tiling setup: AeroSpace + SketchyBar, Catppuccin Latte, Ghostty.
 
 ---
 
-## The launcher is the main entry point
+## `dot` is the entry point
 
-`config/aerospace/launcher.sh`, bound to **⌥space**, is the canonical way into
-everything this setup does. It is not a convenience layer bolted on the side —
-it is the discovery surface. A user who remembers only ⌥space must be able to
-reach every capability from it, and to learn its keybinding while doing so.
+`bin/dot` is the single, supported surface for everything this setup does.
+**Do not edit config files to make a change `dot` can make**, and do not add a
+keybinding or bar button that has no `dot` command behind it.
 
-**This is a maintenance obligation, not a suggestion.**
+### Every capability describes itself
 
-### Whenever you add an action
+A capability is a script in `libexec/dot/<group>-<verb>` that answers
+`--describe` with a JSON descriptor. That descriptor is the *only* registration:
 
-Add a keybinding, a bar button, or a new script that does something a user
-would want to invoke → **register it in `launcher.sh` in the same change**.
+- the ⌥space palette renders from it
+- `dot help` lists from it
+- `dot capabilities --json` is what an agent reads
+- `bin/check-capabilities.sh` validates it
 
-```bash
-add "<label>" "<detail>" "<command>"
-```
+This replaced a hand-maintained launcher list plus a checker that policed drift
+between it and reality. Don't reintroduce a second place to register things.
 
-- `label` — imperative and plain: `Balance window sizes`, not `balance-sizes`.
-- `detail` — **the keybinding**, e.g. `⌥⇧space`. This column is what makes the
-  launcher a discovery tool rather than just a menu. If there's no binding, use
-  context instead (`workspace 3`, `Do Not Disturb is on`) or leave it empty.
-- `command` — what to run. Quote paths containing `$DIR`.
+### Required fields
 
-Put it in the section it belongs to (scenes / focus / windows / workspaces /
-music / system), and keep state-dependent entries state-dependent: only offer
-*Close scene* for scenes that are open, only list *occupied* workspaces.
+`id`, `summary`, `destructive`. Plus:
 
-### Whenever you remove or rename an action
+- **`instances`** — put the capability in the palette, one row each (a scene
+  each, a workspace each). Omit for query-only commands; printing JSON into a
+  picker helps nobody.
+- **`guard`** — mandatory when `destructive: true`. The check fails without it.
+  State what stops it firing at the wrong target.
+- **`verify`** — a command that proves the change landed. Provide one for
+  anything that mutates state.
+- **`keybinding`** — never hardcode it. Read it from `aerospace.toml` with
+  `keybinding()` in `_lib.sh`, so a hint can't drift from the binding.
 
-Remove or update its launcher entry in the same change. A palette entry that
-fails is worse than a missing one.
+### Verify, never trust exit codes
 
-### Whenever you change a keybinding
+AeroSpace will accept `layout tiling` and report success while moving nothing —
+this cost hours in one session. Anything that mutates state must be checked
+against the world, which is what `verify` is for.
 
-Update the `detail` column. A stale binding hint actively misleads.
+### Adding a capability
 
-### Verify
-
-```sh
-bin/check-launcher.sh      # fails if a binding or bar button has no entry
-launcher.sh --dry-run      # prints the menu without a GUI
-```
-
-`check-launcher.sh` is the backstop, not the goal — it proves a binding is
-*mentioned*, not that the entry is good. Read the rendered menu.
-
----
+One file. No second registration. Then `bin/check-capabilities.sh`.
 
 ## Before you finish
 
 ```sh
-bin/doctor.sh           # verifies the live system, including GUI-only steps
-githooks/pre-commit     # syntax + shellcheck + launcher completeness
+dot doctor                   # verifies the live system, including GUI-only steps
+bin/check-capabilities.sh    # every capability describes itself correctly
+githooks/pre-commit          # syntax + shellcheck + capability validation
 ```
 
 The hook runs automatically on commit. Don't `--no-verify` past it without
@@ -87,6 +82,11 @@ id, not by "whatever is focused". This has caused two real bugs.
 opens and refuses to close anything else. A confirmation dialog is too easy to
 fire at the wrong target.
 
+**Themes are data.** A theme is `themes/<name>/` with `colors.sh`,
+`ghostty.conf` and `meta.json`. `dot theme set` repoints the symlinks. Accents
+must be darkened until white text on them clears 4.5:1 — measure, don't eyeball;
+both upstream palettes shipped accents that fail badly on a light background.
+
 **Scenes are data.** They live in `config/aerospace/scenes.json`, not in a
 `case` statement. `scene.sh --list` and `--describe` feed the launcher, so a new
 scene appears in the palette on its own.
@@ -114,11 +114,13 @@ falls back and looks like it worked.
 |---|---|
 | `aerospace.toml` | → `~/.aerospace.toml` |
 | `config/<name>/` | → `~/.config/<name>/` (auto-linked by `install.sh`) |
-| `config/aerospace/launcher.sh` | **the palette — keep in sync** |
+| `bin/dot` | the dispatcher — **the entry point** |
+| `libexec/dot/<group>-<verb>` | one capability each, self-describing |
+| `themes/<name>/` | `colors.sh` + `ghostty.conf` + `meta.json` |
 | `config/aerospace/scene.sh` | named window layouts; `--list` feeds the palette |
 | `config/aerospace/split-lib.sh` | shared window sizing |
 | `config/aerospace/src/picker.swift` | the chooser, compiled to `bin/picker` (gitignored) |
-| `bin/check-launcher.sh` | the launcher completeness check |
+| `bin/check-capabilities.sh` | validates every descriptor |
 
 After editing: `aerospace reload-config`, `sketchybar --reload`, and rebuild the
 picker with `swiftc -O -o config/aerospace/bin/picker

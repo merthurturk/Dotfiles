@@ -12,14 +12,14 @@ source "$HOME/.config/aerospace/logging.sh"
 
 source "$CONFIG_DIR/colors.sh"
 
-SCENE="$HOME/.config/aerospace/scene.sh"
+DOT="$HOME/.local/bin/dot"
 
 if [ "$BUTTON" != "right" ]; then
-  "$SCENE" chill
+  "$DOT" scene open chill
   exit 0
 fi
 
-if ! "$SCENE" close 2>/dev/null; then
+if ! "$DOT" scene close 2>/dev/null; then
   sketchybar --set scene label="Not a scene" \
                          label.drawing=on \
                          label.color="$MAROON" \

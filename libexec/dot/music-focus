@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -u
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+if [ "${1:-}" = "--describe" ]; then
+  now=""
+  if pgrep -x Music >/dev/null 2>&1; then
+    now="$(osascript -e 'tell application "Music"
+      if player state is playing or player state is paused then
+        return (artist of current track) & " — " & (name of current track)
+      end if
+    end tell' 2>/dev/null)"
+  fi
+  jq -n --arg now "$now" '{
+    id:"music.focus", summary:"Focus the Apple Music window", args:[],
+    destructive:false,
+    instances: (if $now != "" then [{label:"Focus Music", detail:$now, args:[]}] else [] end)}'
+  exit 0
+fi
+exec "$SKETCHY/plugins/music_click.sh"

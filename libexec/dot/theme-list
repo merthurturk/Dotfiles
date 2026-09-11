@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -u
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+THEMES="$DOT_ROOT/themes"
+current="$(cat "$STATE_DIR/theme" 2>/dev/null)"
+
+if [ "${1:-}" = "--describe" ]; then
+  jq -n --argjson themes "$(ls "$THEMES" | jq -R -s 'split("\n")|map(select(length>0))')" '{
+    id:"theme.list", summary:"List available themes", args:[], destructive:false}'
+  exit 0
+fi
+
+if [ "${1:-}" = "--json" ]; then
+  for t in "$THEMES"/*/; do
+    n="$(basename "$t")"
+    jq --arg id "$n" --argjson cur "$([ "$n" = "$current" ] && echo true || echo false)" \
+       '. + {id:$id, current:$cur}' "$t/meta.json"
+  done | jq -s '.'
+else
+  for t in "$THEMES"/*/; do
+    n="$(basename "$t")"
+    mark=" "; [ "$n" = "$current" ] && mark="*"
+    printf ' %s %-20s %s\n' "$mark" "$n" "$(jq -r '.name' "$t/meta.json")"
+  done
+fi

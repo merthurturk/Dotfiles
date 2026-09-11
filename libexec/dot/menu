@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+#
+# The command palette. Renders whatever `dot capabilities` reports -- there is
+# no list of entries here to keep in sync, which is the point: a capability that
+# exists is in the menu, and one that doesn't, isn't.
+
+set -u
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+source "$DOT_ROOT/config/aerospace/logging.sh"
+
+if [ "${1:-}" = "--describe" ]; then
+  # Deliberately no instances: the menu doesn't list itself.
+  jq -n '{id:"menu", summary:"Open the command palette", args:[], destructive:false}'
+  exit 0
+fi
+
+PICKER="$DOT_ROOT/config/aerospace/bin/picker"
+MENU="$(mktemp)"; trap 'rm -f "$MENU"' EXIT
+
+# A capability appears in the menu exactly when it declares instances. Query
+# commands (dot scene list, dot window list) deliberately declare none -- they
+# are CLI and agent surface, and printing JSON into a picker is useless.
+"$DOT_ROOT/bin/dot" capabilities --json | jq -r '
+  .[] | select(.id != "menu") | . as $c
+  | ($c.instances // [])[]
+  | [ .label,
+      (.detail // ""),
+      ([$c.command] + ((.args // []) | map(tostring)) | join(" "))
+    ] | join("\t")' > "$MENU"
+
+if [ "${1:-}" = "--dry-run" ]; then
+  awk -F'\t' '{ printf "%-34s %-28s %s\n", $1, $2, $3 }' "$MENU"
+  exit 0
+fi
+
+[ -x "$PICKER" ] || { echo "menu: picker not built - run install.sh" >&2; exit 1; }
+
+CHOICE="$(cut -f1,2 "$MENU" \
+  | PICKER_PROMPT="What do you want to do?" PICKER_CONTEXT=menu "$PICKER")"
+[ -z "$CHOICE" ] && exit 0
+
+CMD="$(awk -F'\t' -v c="$CHOICE" '$1 == c { print $3; exit }' "$MENU")"
+[ -z "$CMD" ] && exit 1
+
+# shellcheck disable=SC2086  # the command and its args are built above, not user input
+DOT_ACTOR=menu exec $CMD

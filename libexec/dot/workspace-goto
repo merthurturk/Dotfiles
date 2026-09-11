@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -u
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+
+if [ "${1:-}" = "--describe" ]; then
+  current="$("$AEROSPACE" list-workspaces --focused)"
+  instances="$(
+    "$AEROSPACE" list-workspaces --monitor all --empty no | while read -r ws; do
+      [ -n "$ws" ] && [ "$ws" != "$current" ] || continue
+      # A scene workspace should say what it is, not list its browser windows.
+      scene="$(awk -F'\t' -v w="$ws" '$1 == w { print $2; exit }' \
+               "$STATE_DIR/scenes" 2>/dev/null)"
+      if [ -n "$scene" ]; then
+        detail="scene: $scene"
+      else
+        detail="$("$AEROSPACE" list-windows --workspace "$ws" --format '%{app-name}' \
+                  | sort -u | paste -sd ', ' -)"
+      fi
+      jq -n --arg ws "$ws" --arg d "$detail" \
+        '{label: ("Go to workspace " + $ws), detail: $d, args: [$ws]}'
+    done | jq -s '.')"
+  jq -n --argjson instances "$instances" '{
+    id: "workspace.goto",
+    summary: "Focus a workspace",
+    args: [{name: "workspace", required: true}],
+    destructive: false,
+    instances: $instances
+  }'
+  exit 0
+fi
+exec "$AEROSPACE" workspace "$@"

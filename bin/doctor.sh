@@ -94,12 +94,16 @@ head_ "Built artefacts"
   && ok "picker built" \
   || no "picker not built - swiftc -O -o config/aerospace/bin/picker config/aerospace/src/picker.swift -framework AppKit"
 
-head_ "Launcher"
-if "$REPO/bin/check-launcher.sh" >/dev/null 2>&1; then
-  ok "every entry point is reachable from ⌥space"
+head_ "Capabilities"
+if "$REPO/bin/check-capabilities.sh" >/dev/null 2>&1; then
+  n="$(DOT_ROOT="$REPO" "$REPO/bin/dot" capabilities --json | jq 'length')"
+  ok "$n capabilities valid, palette renders"
 else
-  no "some entry points are missing from the launcher - run bin/check-launcher.sh"
+  no "capability surface is broken - run bin/check-capabilities.sh"
 fi
+[ -L "$HOME/.local/bin/dot" ] && ok "dot on PATH" || no "$HOME/.local/bin/dot missing - run install.sh"
+theme="$(cat "$STATE/theme" 2>/dev/null)"
+[ -n "$theme" ] && ok "theme: $theme" || meh "no theme recorded - run dot theme set <name>"
 
 head_ "Recent errors"
 if [ -s "$STATE/log" ]; then

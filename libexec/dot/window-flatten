@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -u
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+if [ "${1:-}" = "--describe" ]; then
+  jq -n '{id:"window.flatten", summary:"Reset the workspace layout tree",
+          args:[], destructive:false,
+          instances:[{label:"Reset workspace layout", detail:"⌥⇧; then r", args:[]}]}'
+  exit 0
+fi
+audit "window flatten"
+exec "$AEROSPACE" flatten-workspace-tree

@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+#
+# Switches the whole look at once: the bar's palette and the terminal's theme
+# come from the same theme directory, so they can't drift apart.
+
+set -u
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+THEMES="$DOT_ROOT/themes"
+
+if [ "${1:-}" = "--describe" ]; then
+  current="$(cat "$STATE_DIR/theme" 2>/dev/null)"
+  jq -n \
+    --argjson choices "$(ls "$THEMES" | jq -R -s 'split("\n")|map(select(length>0))')" \
+    --argjson instances "$(
+      for t in "$THEMES"/*/; do
+        n="$(basename "$t")"
+        [ "$n" = "$current" ] && continue
+        jq -n --arg n "$n" --arg label "$(jq -r '.name' "$t/meta.json")" \
+              --arg app "$(jq -r '.appearance' "$t/meta.json")" \
+          '{label: ("Theme: " + $label), detail: $app, args: [$n]}'
+      done | jq -s '.')" '{
+      id: "theme.set",
+      summary: "Switch the bar and terminal theme together",
+      args: [{name:"theme", required:true, choices:$choices}],
+      destructive: false,
+      verify: "dot theme list --json",
+      instances: $instances
+    }'
+  exit 0
+fi
+
+THEME="${1:-}"
+[ -n "$THEME" ] || { echo "usage: dot theme set <name>" >&2; "$DOT_ROOT/bin/dot" theme list >&2; exit 1; }
+DIR="$THEMES/$THEME"
+[ -d "$DIR" ] || { echo "dot: no theme '$THEME'" >&2; "$DOT_ROOT/bin/dot" theme list >&2; exit 1; }
+
+ln -sfn "$DIR/colors.sh"   "$DOT_ROOT/config/sketchybar/colors.sh"
+ln -sfn "$DIR/ghostty.conf" "$DOT_ROOT/config/ghostty/theme.conf"
+mkdir -p "$STATE_DIR"; printf '%s\n' "$THEME" > "$STATE_DIR/theme"
+audit "theme set $THEME"
+
+sketchybar --reload 2>/dev/null
+
+echo "theme: $THEME"
+echo "  bar reloaded."
+echo "  Ghostty picks it up on its next config reload (⌘⇧, in a terminal)."

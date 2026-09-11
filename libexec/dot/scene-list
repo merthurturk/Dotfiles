@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -u
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+
+if [ "${1:-}" = "--describe" ]; then
+  jq -n '{
+    id: "scene.list",
+    summary: "Show which scenes are defined and which are currently open",
+    args: [{name: "--json", required: false}],
+    destructive: false
+  }'
+  exit 0
+fi
+
+open_json="$("$DOT_ROOT/config/aerospace/scene.sh" --open-scenes 2>/dev/null \
+  | jq -R -s 'split("\n") | map(select(length>0)) | map(split("\t"))
+              | map({workspace: .[0], scene: .[1]})')"
+
+if [ "${1:-}" = "--json" ]; then
+  jq -n --argjson defined "$(jq -c 'keys' "$SCENES_JSON")" \
+        --argjson open "$open_json" '{defined: $defined, open: $open}'
+else
+  echo "defined:"; jq -r 'keys[] | "  " + .' "$SCENES_JSON"
+  echo "open:"
+  printf '%s' "$open_json" | jq -r '.[] | "  workspace \(.workspace): \(.scene)"'
+fi

@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -u
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+if [ "${1:-}" = "--describe" ]; then
+  jq -n '{id:"window.list", summary:"List every window, workspace and layout state",
+          args:[{name:"--json", required:false}], destructive:false}'
+  exit 0
+fi
+fmt='%{workspace}|%{window-id}|%{window-layout}|%{app-name}|%{window-title}'
+if [ "${1:-}" = "--json" ]; then
+  "$AEROSPACE" list-windows --all --format "$fmt" \
+    | jq -R -s 'split("\n") | map(select(length>0)) | map(split("|"))
+                | map({workspace:.[0], id:(.[1]|tonumber), layout:.[2],
+                       app:.[3], title:.[4]})'
+else
+  "$AEROSPACE" list-windows --all --format "  ws=$fmt"
+fi

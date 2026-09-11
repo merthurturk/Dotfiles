@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+#
+# dot -- one entry point for everything this setup can do.
+#
+#   dot <group> <verb> [args]     e.g. dot scene open chill
+#   dot <command> [args]          e.g. dot doctor
+#   dot capabilities [--json]     machine-readable list of everything below
+#   dot help
+#
+# Each capability is a script in libexec/dot/ named <group>-<verb>. Every one
+# of them answers --describe with a JSON descriptor, which is what makes this
+# surface discoverable: the launcher renders from it, and so can an agent.
+# Nothing has to be registered in a second place.
+
+set -u
+
+# Resolve through symlinks: dot is normally invoked via ~/.local/bin/dot, and
+# dirname on the link would put DOT_ROOT in the wrong place entirely.
+SELF="${BASH_SOURCE[0]}"
+while [ -L "$SELF" ]; do
+  target="$(readlink "$SELF")"
+  case "$target" in
+    /*) SELF="$target" ;;
+     *) SELF="$(cd "$(dirname "$SELF")" && pwd)/$target" ;;
+  esac
+done
+DOT_ROOT="$(cd "$(dirname "$SELF")/.." && pwd)"
+export DOT_ROOT
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+LIBEXEC="$DOT_ROOT/libexec/dot"
+
+die() { printf 'dot: %s\n' "$*" >&2; exit 1; }
+
+# _lib.sh is shared code, not a command.
+list_commands() { ls "$LIBEXEC" 2>/dev/null | grep -v '^_' | sort; }
+
+usage() {
+  cat <<EOF
+usage: dot <group> <verb> [args]
+       dot <command> [args]
+
+commands:
+EOF
+  local last=""
+  while IFS= read -r c; do
+    [ -n "$c" ] || continue
+    local group="${c%%-*}" verb="${c#*-}"
+    [ "$verb" = "$c" ] && verb=""
+    local summary
+    summary="$("$LIBEXEC/$c" --describe 2>/dev/null | jq -r '.summary // ""' 2>/dev/null)"
+    if [ "$group" != "$last" ]; then printf '\n'; last="$group"; fi
+    printf '  %-26s %s\n' "dot ${group}${verb:+ $verb}" "$summary"
+  done < <(list_commands)
+  printf '\n  %-26s %s\n' "dot capabilities --json" "everything above, machine-readable"
+}
+
+# --- capability discovery -------------------------------------------------
+
+capabilities() {
+  local json="[]" c d
+  while IFS= read -r c; do
+    [ -n "$c" ] || continue
+    d="$("$LIBEXEC/$c" --describe 2>/dev/null)"
+    if [ -n "$d" ] && printf '%s' "$d" | jq -e . >/dev/null 2>&1; then
+      json="$(printf '%s' "$json" | jq --argjson x "$d" --arg cmd "${c/-/ }" \
+              '. + [$x + {command: ("dot " + $cmd)}]')"
+    fi
+  done < <(list_commands)
+  printf '%s\n' "$json"
+}
+
+# --- dispatch -------------------------------------------------------------
+
+case "${1:-}" in
+  ""|help|-h|--help) usage; exit 0 ;;
+  capabilities)
+    shift
+    if [ "${1:-}" = "--json" ] || [ $# -eq 0 ]; then
+      capabilities
+    else
+      die "usage: dot capabilities [--json]"
+    fi
+    exit 0
+    ;;
+esac
+
+# Try "<group>-<verb>" first, then a bare "<command>".
+if [ $# -ge 2 ] && [ -x "$LIBEXEC/$1-$2" ]; then
+  cmd="$LIBEXEC/$1-$2"; shift 2
+elif [ -x "$LIBEXEC/$1" ]; then
+  cmd="$LIBEXEC/$1"; shift
+else
+  printf 'dot: unknown command: %s\n\n' "$*" >&2
+  usage >&2
+  exit 1
+fi
+
+exec "$cmd" "$@"
