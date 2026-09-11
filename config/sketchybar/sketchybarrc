@@ -108,7 +108,9 @@ sketchybar --add item scene left \
                  label.drawing=off \
                  background.color="$GROUP_BG" \
                  background.border_color="$GROUP_BORDER" \
-                 click_script="$PLUGIN_DIR/scene_click.sh"
+                 script="$PLUGIN_DIR/hover.sh" \
+                 click_script="$PLUGIN_DIR/scene_click.sh" \
+           --subscribe scene mouse.entered mouse.exited
 
 ##### AeroSpace workspaces #####
 
@@ -127,7 +129,9 @@ for ws in $(aerospace list-workspaces --all); do
                    background.color="$WS_OCCUPIED_BG" \
                    background.border_color="$WS_OCCUPIED_BORDER" \
                    drawing=off \
-                   click_script="aerospace workspace $ws"
+                   script="$PLUGIN_DIR/hover.sh" \
+                   click_script="aerospace workspace $ws" \
+             --subscribe space."$ws" mouse.entered mouse.exited
 done
 
 # Hidden driver item: one script call repaints every pill above.
@@ -180,7 +184,7 @@ sketchybar --add item focus right \
                  icon.padding_right=9 \
                  script="$PLUGIN_DIR/focus.sh" \
                  click_script="$PLUGIN_DIR/focus_click.sh" \
-           --subscribe focus focus_change system_woke
+           --subscribe focus focus_change system_woke mouse.entered mouse.exited
 
 sketchybar --add item clock right \
            --set clock update_freq=15 \
@@ -215,7 +219,7 @@ sketchybar --add item music right \
                  background.border_color="$GROUP_BORDER" \
                  script="$PLUGIN_DIR/music.sh" \
                  click_script="$PLUGIN_DIR/music_click.sh" \
-           --subscribe music media_change
+           --subscribe music media_change mouse.entered mouse.exited
 
 ##### Initial paint #####
 

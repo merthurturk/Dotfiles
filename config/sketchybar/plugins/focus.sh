@@ -7,6 +7,14 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 source "$CONFIG_DIR/colors.sh"
 source "$CONFIG_DIR/plugins/focus_lib.sh"
 
+# Hover: only the border changes, so the state-driven fill below is untouched.
+# mouse.exited deliberately falls through to the normal repaint, which restores
+# the correct border for whatever state the item is in.
+if [ "$SENDER" = "mouse.entered" ]; then
+  sketchybar --animate sin 8 --set "$NAME" background.border_color="$BLUE"
+  exit 0
+fi
+
 BELL="󰂚"
 
 if ! focus_db_readable; then
@@ -19,6 +27,11 @@ if ! focus_db_readable; then
 fi
 
 ACTIVE="$(focus_active_id)"
+if [ $? -ne 0 ]; then
+  # jq failed -- almost always Assertions.json caught mid-write. Treating that
+  # as "no focus" makes the chip flash off and back, so leave it alone instead.
+  exit 0
+fi
 
 # Publish the state for processes without Full Disk Access. Only sketchybar is
 # granted FDA, so anything else (the launcher, run via AeroSpace) can't read

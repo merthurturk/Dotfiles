@@ -10,6 +10,15 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 source "$CONFIG_DIR/colors.sh"
 
+
+# Hover: only the border changes, so the state-driven fill below is untouched.
+# mouse.exited deliberately falls through to the normal repaint, which restores
+# the correct border for whatever state the item is in.
+if [ "$SENDER" = "mouse.entered" ]; then
+  sketchybar --animate sin 8 --set "$NAME" background.border_color="$BLUE"
+  exit 0
+fi
+
 hide() { sketchybar --set "$NAME" drawing=off; exit 0; }
 
 # Never launch Music just to ask what it's playing.
@@ -54,8 +63,10 @@ if [ ${#LABEL} -gt $MAX ]; then
   LABEL="$(printf '%.*s' $((MAX - 1)) "$LABEL")…"
 fi
 
+# border_color is set here too, so a mouse.exited repaint clears the hover ring.
 sketchybar --set "$NAME" drawing=on \
                          icon="$ICON" \
                          icon.color="$ICON_COLOR" \
                          label="$LABEL" \
-                         label.color="$FG"
+                         label.color="$FG" \
+                         background.border_color="$GROUP_BORDER"

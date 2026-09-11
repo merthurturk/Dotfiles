@@ -39,6 +39,12 @@ Right: now-playing, volume/battery/clock cluster, Focus chip.
   live state from `~/Library/DoNotDisturb/DB`.
 - **Now playing** — Apple Music; click focuses its window *through AeroSpace*,
   so it switches to the right workspace. Hidden when Music isn't running.
+- **Hover** — clickable items (workspace pills, ☕, Focus, now-playing) take a
+  blue ring on `mouse.entered`. Only the *border* changes, never the fill, so it
+  reads correctly over every state colour.
+
+SketchyBar has no cursor property, so the pointer can't change to a hand over
+clickable items — the ring is the whole affordance available.
 
 ## Keybindings on top of the AeroSpace defaults
 
