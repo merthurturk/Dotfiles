@@ -141,6 +141,9 @@ gaps.outer.right =      10
     # Same, but summons an existing window of any app instead of opening one.
     # alt-shift-0 = 'exec-and-forget $HOME/.config/aerospace/split-with.sh "Ghostty" 0.6'
     alt-shift-backslash = 'balance-sizes'
+    # Command palette: every action in one place, with its keybinding shown.
+    alt-space = 'exec-and-forget $HOME/.config/aerospace/launcher.sh'
+
     # Open a named window layout on an empty workspace.
     alt-shift-space = 'exec-and-forget $HOME/.config/aerospace/scene.sh chill'
     # Close every window on the focused workspace, but only if a scene opened it.

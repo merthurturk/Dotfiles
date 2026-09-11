@@ -20,6 +20,17 @@ fi
 
 ACTIVE="$(focus_active_id)"
 
+# Publish the state for processes without Full Disk Access. Only sketchybar is
+# granted FDA, so anything else (the launcher, run via AeroSpace) can't read
+# the DND database itself and reads this instead.
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/aerospace"
+mkdir -p "$STATE_DIR"
+if [ -n "$ACTIVE" ]; then
+  printf '%s\t%s\n' "$ACTIVE" "$(focus_name_for "$ACTIVE")" > "$STATE_DIR/focus"
+else
+  : > "$STATE_DIR/focus"
+fi
+
 # Icon only: the per-mode glyph says *which* Focus is on, and the filled pill
 # says *that* one is on, so the mode name would just be repeating itself.
 if [ -n "$ACTIVE" ]; then

@@ -45,6 +45,21 @@ scene_of() {         # <workspace> -> scene name, or empty
   awk -F'\t' -v w="$1" '$1 == w { print $2; exit }' "$STATE_FILE"
 }
 
+# --- list -----------------------------------------------------------------
+# Single source of truth for what scenes exist, so the launcher stays in sync.
+
+SCENES="chill"
+
+if [ "${1:-}" = "--list" ]; then
+  printf '%s\n' $SCENES
+  exit 0
+fi
+
+if [ "${1:-}" = "--open-scenes" ]; then
+  [ -f "$STATE_FILE" ] && cat "$STATE_FILE"
+  exit 0
+fi
+
 # --- close ----------------------------------------------------------------
 
 if [ "${1:-}" = "close" ]; then

@@ -44,6 +44,7 @@ Right: now-playing, volume/battery/clock cluster, Focus chip.
 
 | Key | Action |
 |---|---|
+| `⌥space` | **Command palette** — every action, searchable, with its keybinding shown |
 | `⌥⇧↩` | New Chrome window beside the focused one at 3/5–2/5, asking which profile |
 | `⌥⇧\` | `balance-sizes` — reset the workspace to even splits |
 | `⌥⇧space` | Open the `chill` scene on an empty workspace (also left-click the ☕ button) |
@@ -76,6 +77,19 @@ Two traps worth remembering:
   be chosen by family name: `Berkeley Mono Bold SemiCondensed:Regular`.
 - For the same reason Ghostty needs `font-family-bold` / `font-family-italic`
   named explicitly, or it synthesises them.
+
+## The command palette
+
+`⌥space` opens `config/aerospace/launcher.sh` in the picker: scenes, the Focus
+toggle, window and layout commands, workspace switching, now-playing, config
+reloads. Each entry shows its own keybinding in the detail column, so it
+doubles as the place to rediscover a binding you've forgotten.
+
+The menu is rebuilt on every invocation, so it reflects current state — Focus
+reads on or off, only *open* scenes offer a Close, only *occupied* workspaces
+are listed with the apps on them.
+
+`launcher.sh --dry-run` prints the menu instead of showing the picker.
 
 ## Scenes
 
@@ -169,6 +183,10 @@ rediscovered:
   previously focused window, so new windows are born on the *old* workspace.
   `scene.sh` therefore opens windows wherever they land and moves them by
   window id, rather than switching first and trusting focus to stay.
+- **Only sketchybar has Full Disk Access**, so it's the only process that can
+  read the Focus database. `focus.sh` publishes what it reads to
+  `~/.local/state/aerospace/focus`; the launcher (run by AeroSpace, which has no
+  FDA) reads that file instead of the database.
 - **MediaRemote was restricted in macOS 15.4**, so SketchyBar's `media_change`
   event is unreliable; the now-playing chip uses AppleScript.
 - No `/Users/<name>` or `/opt/homebrew` paths in the configs — `$HOME` and the
