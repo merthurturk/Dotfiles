@@ -22,10 +22,29 @@ trap 'rm -f "$MENU"' EXIT
 # add <label> <detail> <command>
 add() { printf '%s\t%s\t%s\n' "$1" "$2" "$3" >> "$MENU"; }
 
+# keyhint <substring of a binding's command> -> "⌥⇧space", or empty
+#
+# Read out of aerospace.toml rather than hardcoded, so a hint can never drift
+# from the binding it describes -- and actions with no binding honestly show
+# none instead of borrowing a neighbour's.
+keyhint() {
+  local key
+  key="$(grep -E "^[[:space:]]*[a-z0-9-]+ = " "$HOME/.aerospace.toml" \
+         | grep -F -- "$1" | head -1 \
+         | sed -E 's/^[[:space:]]*([a-z0-9-]+) =.*/\1/')"
+  [ -n "$key" ] || return 0
+  printf '%s' "$key" | sed -e 's/alt-/⌥/g'  -e 's/shift-/⇧/g' \
+                           -e 's/ctrl-/⌃/g' -e 's/cmd-/⌘/g'   \
+                           -e 's/enter/↩/'  -e 's/backspace/⌫/' \
+                           -e 's/backslash/\\/' -e 's/semicolon/;/' \
+                           -e 's/slash/\//' -e 's/comma/,/' -e 's/minus/-/' \
+                           -e 's/equal/=/'
+}
+
 # --- scenes ---------------------------------------------------------------
 
 for scene in $("$DIR/scene.sh" --list); do
-  add "Open scene: $scene" "⌥⇧space" "'$DIR/scene.sh' '$scene'"
+  add "Open scene: $scene" "$(keyhint "scene.sh $scene")" "'$DIR/scene.sh' '$scene'"
 done
 
 while IFS=$'\t' read -r ws name; do
@@ -54,8 +73,8 @@ fi
 
 # --- windows --------------------------------------------------------------
 
-add "Chrome beside this window" "⌥⇧↩" "'$DIR/chrome-split.sh' 0.6"
-add "Balance window sizes"      "⌥⇧\\"  "$AEROSPACE balance-sizes"
+add "Chrome beside this window" "$(keyhint chrome-split.sh)" "'$DIR/chrome-split.sh' 0.6"
+add "Balance window sizes"      "$(keyhint balance-sizes)"   "$AEROSPACE balance-sizes"
 add "Reset workspace layout"    "⌥⇧; then r" "$AEROSPACE flatten-workspace-tree"
 add "Toggle floating / tiling"  "⌥⇧; then f" "$AEROSPACE layout floating tiling"
 add "Toggle fullscreen"         ""      "$AEROSPACE fullscreen"

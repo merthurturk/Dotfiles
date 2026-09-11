@@ -27,6 +27,7 @@ STATE_FILE="$STATE_DIR/scenes"   # "<workspace>\t<scene name>" per line
 
 remember_scene() {   # <workspace> <scene>
   mkdir -p "$STATE_DIR"
+  prune_scenes
   local tmp="$STATE_FILE.tmp"
   [ -f "$STATE_FILE" ] && grep -v "^$1	" "$STATE_FILE" > "$tmp" 2>/dev/null
   printf '%s\t%s\n' "$1" "$2" >> "$tmp"
@@ -40,6 +41,22 @@ forget_scene() {     # <workspace>
   mv "$tmp" "$STATE_FILE"
 }
 
+# Drops entries whose workspace no longer has any windows. Without this,
+# reopening a scene (which summons its windows out of the old workspace) leaves
+# a stale row behind and the launcher offers a Close for an empty workspace.
+prune_scenes() {
+  [ -f "$STATE_FILE" ] || return 0
+  local tmp="$STATE_FILE.tmp" ws name
+  : > "$tmp"
+  while IFS=$'\t' read -r ws name; do
+    [ -n "${ws:-}" ] || continue
+    if [ -n "$($AEROSPACE list-windows --workspace "$ws" --format '%{window-id}')" ]; then
+      printf '%s\t%s\n' "$ws" "$name" >> "$tmp"
+    fi
+  done < "$STATE_FILE"
+  mv "$tmp" "$STATE_FILE"
+}
+
 scene_of() {         # <workspace> -> scene name, or empty
   [ -f "$STATE_FILE" ] || return 0
   awk -F'\t' -v w="$1" '$1 == w { print $2; exit }' "$STATE_FILE"
@@ -48,7 +65,7 @@ scene_of() {         # <workspace> -> scene name, or empty
 # --- list -----------------------------------------------------------------
 # Single source of truth for what scenes exist, so the launcher stays in sync.
 
-SCENES="chill"
+SCENES="chill messaging"
 
 if [ "${1:-}" = "--list" ]; then
   printf '%s\n' $SCENES
@@ -56,6 +73,7 @@ if [ "${1:-}" = "--list" ]; then
 fi
 
 if [ "${1:-}" = "--open-scenes" ]; then
+  prune_scenes
   [ -f "$STATE_FILE" ] && cat "$STATE_FILE"
   exit 0
 fi
@@ -104,11 +122,20 @@ fi
 SCENE="${1:-chill}"
 PROFILE_NAME="${2:-}"
 
+# A scene is a list of window specs, left to right. Each spec is one of:
+#   app:<App Name>     summon that app's window, launching it if not running
+#   chrome:<urls...>   a new Chrome window with those tabs
+#   chrome-app:<url>   a Chrome --app window: no tab strip, no toolbar
+# RATIO is the share of the width given to the first window.
 case "$SCENE" in
   chill)
-    MAIN_URLS=(https://www.youtube.com https://x.com https://www.instagram.com)
-    SIDE_URL="https://app.contextengine.com/chat"
+    WINDOWS=("chrome:https://www.youtube.com https://x.com https://www.instagram.com"
+             "chrome-app:https://app.contextengine.com/chat")
     RATIO=0.70
+    ;;
+  messaging)
+    WINDOWS=("app:WhatsApp" "app:Telegram")
+    RATIO=0.50
     ;;
   *)
     echo "scene: unknown scene '$SCENE'" >&2
@@ -151,30 +178,65 @@ wait_new_window() {   # <sorted list of window ids that existed before>
 
 snapshot() { $AEROSPACE list-windows --all --format '%{window-id}' | sort; }
 
-BEFORE="$(snapshot)"
-open -na "Google Chrome" --args --profile-directory="$PROFILE_DIR" \
-     --new-window "${MAIN_URLS[@]}"
-MAIN_WID="$(wait_new_window "$BEFORE")"
-if [ -z "$MAIN_WID" ]; then
-  echo "scene: main window never appeared" >&2
-  exit 1
-fi
+# Opens one window spec and prints the resulting window id.
+open_spec() {
+  local spec="$1" kind rest before
+  kind="${spec%%:*}"
+  rest="${spec#*:}"
 
-BEFORE="$(snapshot)"
-open -na "Google Chrome" --args --profile-directory="$PROFILE_DIR" \
-     --app="$SIDE_URL"
-SIDE_WID="$(wait_new_window "$BEFORE")"
-if [ -z "$SIDE_WID" ]; then
-  echo "scene: side window never appeared" >&2
-  exit 1
-fi
+  case "$kind" in
+    app)
+      # Native apps get summoned, not duplicated -- most only have one window,
+      # and a second copy of Telegram isn't a thing anyone wants.
+      local existing
+      existing="$(find_app_window "$rest")"
+      if [ -n "$existing" ]; then
+        printf '%s' "$existing"
+        return 0
+      fi
+      before="$(snapshot)"
+      open -a "$rest"
+      wait_new_window "$before"
+      ;;
+    chrome)
+      before="$(snapshot)"
+      # $rest is deliberately unquoted: several URLs become several tabs.
+      open -na "Google Chrome" --args --profile-directory="$PROFILE_DIR" \
+           --new-window $rest
+      wait_new_window "$before"
+      ;;
+    chrome-app)
+      before="$(snapshot)"
+      open -na "Google Chrome" --args --profile-directory="$PROFILE_DIR" \
+           --app="$rest"
+      wait_new_window "$before"
+      ;;
+    *)
+      echo "scene: unknown window spec '$spec'" >&2
+      return 1
+      ;;
+  esac
+}
 
-# Move main first so it ends up on the left, then reveal the workspace.
-$AEROSPACE move-node-to-workspace --window-id "$MAIN_WID" "$WS"
-$AEROSPACE move-node-to-workspace --window-id "$SIDE_WID" "$WS"
+WIDS=()
+for spec in "${WINDOWS[@]}"; do
+  wid="$(open_spec "$spec")"
+  if [ -z "$wid" ]; then
+    echo "scene: window for '$spec' never appeared" >&2
+    exit 1
+  fi
+  WIDS+=("$wid")
+done
+
+# Move in order so the first spec ends up leftmost, then reveal the workspace.
+for wid in "${WIDS[@]}"; do
+  $AEROSPACE move-node-to-workspace --window-id "$wid" "$WS"
+done
 $AEROSPACE workspace "$WS"
 sleep 0.4
 
-split_resize "$MAIN_WID" "$RATIO"
-$AEROSPACE focus --window-id "$MAIN_WID" 2>/dev/null || true
+if [ "${#WIDS[@]}" -ge 2 ]; then
+  split_resize "${WIDS[0]}" "$RATIO"
+fi
+$AEROSPACE focus --window-id "${WIDS[0]}" 2>/dev/null || true
 remember_scene "$WS" "$SCENE"

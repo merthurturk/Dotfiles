@@ -138,10 +138,21 @@ launcher.sh --dry-run      # print the menu without a GUI
 beside it. The side window uses Chrome's `--app` flag, which drops the tab strip
 and toolbar — what you want for a chat panel living in ~500pt.
 
-`chill` opens YouTube / X / Instagram at 70%, with the Context Engine chat at 30%.
+| Scene | Windows |
+|---|---|
+| `chill` | YouTube / X / Instagram at 70%, Context Engine chat at 30% |
+| `messaging` | WhatsApp and Telegram, 50/50 |
 
-Add a scene by adding a `case` branch with its `MAIN_URLS`, `SIDE_URL` and
-`RATIO`, then bind it:
+A scene is a list of window specs, left to right:
+
+| Spec | Opens |
+|---|---|
+| `app:<App Name>` | summons that app's window, launching it only if needed |
+| `chrome:<urls…>` | a new Chrome window with those tabs |
+| `chrome-app:<url>` | a Chrome `--app` window: no tab strip, no toolbar |
+
+`RATIO` is the share of width given to the first window. Add a scene by adding
+a `case` branch, then optionally bind it:
 
 ```toml
 alt-shift-period = 'exec-and-forget $HOME/.config/aerospace/scene.sh work'
@@ -227,6 +238,10 @@ rediscovered:
   read the Focus database. `focus.sh` publishes what it reads to
   `~/.local/state/aerospace/focus`; the launcher (run by AeroSpace, which has no
   FDA) reads that file instead of the database.
+- **App names can carry invisible characters.** WhatsApp reports as
+  `\u200eWhatsApp` (a leading left-to-right mark), so `$2 == "WhatsApp"` never
+  matches and callers wrongly conclude it isn't running. `find_app_window` in
+  `split-lib.sh` compares with non-alphanumerics stripped.
 - **MediaRemote was restricted in macOS 15.4**, so SketchyBar's `media_change`
   event is unreliable; the now-playing chip uses AppleScript.
 - No `/Users/<name>` or `/opt/homebrew` paths in the configs — `$HOME` and the

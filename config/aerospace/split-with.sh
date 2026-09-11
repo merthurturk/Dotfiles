@@ -26,10 +26,10 @@ ORIG_WID="$($AEROSPACE list-windows --focused --format '%{window-id}')"
 
 find_window() {  # $1 = --workspace value, or "--all"
   if [ "$1" = "--all" ]; then
-    $AEROSPACE list-windows --all --format '%{window-id}|%{app-name}'
+    find_app_window "$APP"
   else
-    $AEROSPACE list-windows --workspace "$1" --format '%{window-id}|%{app-name}'
-  fi | awk -F'|' -v a="$APP" '$2 == a { print $1; exit }'
+    find_app_window "$APP" "$1"
+  fi
 }
 
 WID="$(find_window focused)"

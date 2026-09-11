@@ -30,6 +30,25 @@ function run(argv) {
 }' "$mon"
 }
 
+# find_app_window <app-name> [workspace]
+# Prints the first matching window id, or nothing.
+#
+# Names are compared with punctuation and non-ASCII stripped, because some apps
+# carry invisible bidi marks: WhatsApp reports as "\u200eWhatsApp", so a literal
+# equality test silently never matches and callers conclude it isn't running.
+find_app_window() {
+  local app="$1" scope="${2:-}"
+  { if [ -n "$scope" ]; then
+      $AEROSPACE list-windows --workspace "$scope" --format '%{window-id}|%{app-name}'
+    else
+      $AEROSPACE list-windows --all --format '%{window-id}|%{app-name}'
+    fi
+  } | awk -F'|' -v a="$app" '
+      function norm(s) { gsub(/[^A-Za-z0-9]/, "", s); return tolower(s) }
+      norm($2) == norm(a) { print $1; exit }
+    '
+}
+
 # split_resize <window-id> <ratio>
 # Sizes that window to <ratio> of the two-tile area; its sibling takes the rest.
 split_resize() {
