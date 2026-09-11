@@ -54,6 +54,16 @@ launcher.sh --dry-run      # prints the menu without a GUI
 
 ---
 
+## Before you finish
+
+```sh
+bin/doctor.sh           # verifies the live system, including GUI-only steps
+githooks/pre-commit     # syntax + shellcheck + launcher completeness
+```
+
+The hook runs automatically on commit. Don't `--no-verify` past it without
+saying why.
+
 ## Conventions
 
 **No absolute paths.** No `/Users/<name>`, no `/opt/homebrew`. Use `$HOME`, and
@@ -76,6 +86,20 @@ id, not by "whatever is focused". This has caused two real bugs.
 **Destructive actions need a ledger, not a prompt.** `scene.sh` records what it
 opens and refuses to close anything else. A confirmation dialog is too easy to
 fire at the wrong target.
+
+**Scenes are data.** They live in `config/aerospace/scenes.json`, not in a
+`case` statement. `scene.sh --list` and `--describe` feed the launcher, so a new
+scene appears in the palette on its own.
+
+**Don't hand-wire triggers into `aerospace.toml`.** The event bridge
+(`config/aerospace/event-bridge.sh`, a launchd agent) subscribes to AeroSpace's
+event stream and drives the bar. The only events that exist are
+`focus-changed`, `focused-monitor-changed`, `focused-workspace-changed`,
+`mode-changed`, `window-detected` and `binding-triggered` — there is **no**
+window-closed or window-moved event, which is why `spaces_watcher` also polls.
+
+**Stderr is discarded** by both `exec-and-forget` and `click_script`. Anything
+user-facing should source `config/aerospace/logging.sh`.
 
 **Verify against the running system.** `sketchybar --query <item>`,
 `aerospace list-windows`, `--dry-run`. Font and geometry claims in particular

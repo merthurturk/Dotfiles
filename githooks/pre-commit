@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+#
+# Runs the checks that would otherwise rely on memory. Skip with --no-verify.
+
+set -u
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
+REPO="$(git rev-parse --show-toplevel)"
+cd "$REPO" || exit 1
+fail=0
+
+echo "pre-commit: shell syntax"
+while IFS= read -r f; do
+  bash -n "$f" || { echo "  syntax error: $f" >&2; fail=1; }
+done < <(find . -name '*.sh' -not -path './.git/*'; echo ./config/sketchybar/sketchybarrc)
+
+if command -v shellcheck >/dev/null 2>&1; then
+  echo "pre-commit: shellcheck"
+  # macOS ships bash 3.2, so lint against bash semantics explicitly.
+  if ! find . \( -name '*.sh' -o -name 'sketchybarrc' \) -not -path './.git/*' -print0 \
+       | xargs -0 shellcheck -x -s bash -S warning; then
+    fail=1
+  fi
+else
+  echo "pre-commit: shellcheck not installed, skipping (brew install shellcheck)"
+fi
+
+echo "pre-commit: launcher completeness"
+./bin/check-launcher.sh || fail=1
+
+if [ "$fail" -ne 0 ]; then
+  echo "" >&2
+  echo "pre-commit failed. Fix the above, or commit with --no-verify." >&2
+fi
+exit "$fail"

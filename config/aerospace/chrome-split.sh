@@ -16,6 +16,7 @@ set -u
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$DIR/logging.sh"
 source "$DIR/split-lib.sh"
 
 RATIO="${1:-0.6}"
@@ -49,7 +50,7 @@ if [ -n "$WANT" ]; then
   CHOICE="$WANT"
 elif [ -x "$PICKER" ]; then
   # Native panel: auto-focused, type-to-filter, arrows + enter, esc to cancel.
-  CHOICE="$(printf '%s\n' "${NAMES[@]}" | PICKER_PROMPT="Which Chrome profile?" "$PICKER")"
+  CHOICE="$(printf '%s\n' "${NAMES[@]}" | PICKER_PROMPT="Which Chrome profile?" PICKER_CONTEXT=chrome-profile "$PICKER")"
 else
   # Fallback if the picker hasn't been built. It has no detail column, so strip
   # the tab-separated email off each entry.
@@ -81,7 +82,7 @@ open -na "Google Chrome" --args --profile-directory="$PROFILE_DIR" --new-window
 
 # Wait for AeroSpace to adopt the new window into the focused workspace.
 NEW=""
-for _ in $(seq 1 60); do
+for _i in $(seq 1 60); do
   sleep 0.25
   NEW="$(comm -13 <(printf '%s\n' "$BEFORE") \
                   <($AEROSPACE list-windows --workspace focused --format '%{window-id}' | sort) \

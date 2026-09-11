@@ -8,6 +8,8 @@
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
+source "$HOME/.config/aerospace/logging.sh"
+
 source "$CONFIG_DIR/colors.sh"
 
 SCENE="$HOME/.config/aerospace/scene.sh"

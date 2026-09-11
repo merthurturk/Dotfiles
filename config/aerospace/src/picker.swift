@@ -73,6 +73,51 @@ if items.isEmpty { exit(1) }
 
 let promptText = ProcessInfo.processInfo.environment["PICKER_PROMPT"] ?? "Select"
 
+// MARK: - Frecency
+//
+// With PICKER_CONTEXT set, remember how often each label is chosen and float
+// the common ones to the top. Keyed by context so the launcher's history and
+// the Chrome profile history don't contaminate each other. Without it the
+// picker is stateless, as before.
+
+let historyURL: URL? = ProcessInfo.processInfo.environment["PICKER_CONTEXT"].map { ctx in
+    let base = ProcessInfo.processInfo.environment["XDG_STATE_HOME"]
+        .map { URL(fileURLWithPath: $0) }
+        ?? FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".local/state")
+    let dir = base.appendingPathComponent("aerospace")
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    return dir.appendingPathComponent("picker-\(ctx).history")
+}
+
+// label -> (times chosen, last chosen)
+var history: [String: (count: Int, last: Double)] = [:]
+if let url = historyURL, let body = try? String(contentsOf: url, encoding: .utf8) {
+    for line in body.components(separatedBy: "\n") {
+        let f = line.components(separatedBy: "\t")
+        if f.count == 3, let c = Int(f[0]), let t = Double(f[1]) {
+            history[f[2]] = (c, t)
+        }
+    }
+}
+
+func recordChoice(_ label: String) {
+    guard let url = historyURL else { return }
+    let prev = history[label] ?? (0, 0)
+    history[label] = (prev.count + 1, Date().timeIntervalSince1970)
+    let body = history.map { "\($0.value.count)\t\($0.value.last)\t\($0.key)" }
+                      .joined(separator: "\n")
+    try? body.write(to: url, atomically: true, encoding: .utf8)
+}
+
+// Higher is better. Recency decays over a week so an old favourite yields to a
+// current one without vanishing.
+func frecency(_ label: String) -> Double {
+    guard let h = history[label] else { return 0 }
+    let ageDays = (Date().timeIntervalSince1970 - h.last) / 86_400
+    return Double(h.count) * (1.0 / (1.0 + ageDays / 7.0))
+}
+
 // MARK: - Fuzzy match (subsequence; lower score = tighter match)
 
 func score(_ needle: String, _ hay: String) -> Int? {
@@ -140,7 +185,12 @@ final class Picker: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     let field = NSTextField()
     let stack = NSStackView()
     let empty = NSTextField(labelWithString: "No matches")
-    var shown: [Item] = items
+    var shown: [Item] = items.enumerated()
+        .sorted { a, b in
+            let fa = frecency(a.element.label), fb = frecency(b.element.label)
+            return fa == fb ? a.offset < b.offset : fa > fb
+        }
+        .map { $0.element }
     var sel = 0
     var rows: [RowView] = []
     var everBecameKey = false
@@ -297,14 +347,23 @@ final class Picker: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     func controlTextDidChange(_ obj: Notification) {
         let q = field.stringValue
         if q.isEmpty {
-            shown = items
+            // No query: most-used first, original order for anything unused.
+            shown = items.enumerated()
+                .sorted { a, b in
+                    let fa = frecency(a.element.label), fb = frecency(b.element.label)
+                    return fa == fb ? a.offset < b.offset : fa > fb
+                }
+                .map { $0.element }
         } else {
+            // Match quality leads; frecency only breaks ties.
             shown = items
                 .compactMap { it -> (Int, Item)? in
                     let hay = it.detail.isEmpty ? it.label : "\(it.label) \(it.detail)"
                     return score(q, hay).map { ($0, it) }
                 }
-                .sorted { $0.0 < $1.0 }
+                .sorted { a, b in
+                    a.0 == b.0 ? frecency(a.1.label) > frecency(b.1.label) : a.0 < b.0
+                }
                 .map { $0.1 }
         }
         sel = 0
@@ -313,6 +372,7 @@ final class Picker: NSObject, NSTextFieldDelegate, NSWindowDelegate {
 
     func accept() {
         guard sel < shown.count, !rows.isEmpty else { cancel(); return }
+        recordChoice(shown[sel].label)
         FileHandle.standardOutput.write((shown[sel].label + "\n").data(using: .utf8)!)
         exit(0)
     }

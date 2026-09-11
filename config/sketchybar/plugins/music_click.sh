@@ -5,6 +5,8 @@
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
+source "$HOME/.config/aerospace/logging.sh"
+
 WID="$(aerospace list-windows --all --format '%{window-id}|%{app-name}' \
         | awk -F'|' '$2 == "Music" { print $1; exit }')"
 

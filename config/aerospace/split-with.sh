@@ -16,6 +16,7 @@ set -u
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$DIR/logging.sh"
 source "$DIR/split-lib.sh"
 
 APP="${1:?usage: split-with.sh <app-name> [ratio]}"

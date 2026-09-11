@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>sh.dotfiles.aerospace-bridge</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__HOME__/.config/aerospace/event-bridge.sh</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- The stream ends whenever AeroSpace restarts; respawn rather than die.
+         ThrottleInterval stops a tight loop if AeroSpace isn't running yet. -->
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>StandardErrorPath</key>
+    <string>__HOME__/.local/state/aerospace/bridge.err</string>
+</dict>
+</plist>

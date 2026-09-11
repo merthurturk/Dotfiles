@@ -12,6 +12,7 @@ set -u
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$DIR/logging.sh"
 AEROSPACE=/opt/homebrew/bin/aerospace
 SKETCHY_DIR="$HOME/.config/sketchybar"
 PICKER="$DIR/bin/picker"
@@ -43,9 +44,13 @@ keyhint() {
 
 # --- scenes ---------------------------------------------------------------
 
-for scene in $("$DIR/scene.sh" --list); do
-  add "Open scene: $scene" "$(keyhint "scene.sh $scene")" "'$DIR/scene.sh' '$scene'"
-done
+# Detail is the scene's keybinding if it has one, else a summary of its windows,
+# so an unbound scene still says what it does instead of showing nothing.
+while IFS=$'\t' read -r scene summary; do
+  [ -n "${scene:-}" ] || continue
+  hint="$(keyhint "scene.sh $scene")"
+  add "Open scene: $scene" "${hint:-$summary}" "'$DIR/scene.sh' '$scene'"
+done < <("$DIR/scene.sh" --describe)
 
 while IFS=$'\t' read -r ws name; do
   [ -n "${ws:-}" ] || continue
@@ -120,7 +125,8 @@ if [ ! -x "$PICKER" ]; then
   exit 1
 fi
 
-CHOICE="$(cut -f1,2 "$MENU" | PICKER_PROMPT="What do you want to do?" "$PICKER")"
+CHOICE="$(cut -f1,2 "$MENU" \
+  | PICKER_PROMPT="What do you want to do?" PICKER_CONTEXT=launcher "$PICKER")"
 [ -z "$CHOICE" ] && exit 0
 
 CMD="$(awk -F'\t' -v c="$CHOICE" '$1 == c { print $3; exit }' "$MENU")"

@@ -59,6 +59,26 @@ else
   warn "Until then the Chrome profile prompt falls back to a plain AppleScript list."
 fi
 
+# --- Event bridge ---------------------------------------------------------
+# Translates AeroSpace's event stream into SketchyBar triggers. Without it the
+# bar does not update at all -- the per-binding triggers it replaced are gone.
+
+log "Installing the AeroSpace event bridge"
+mkdir -p "$HOME/Library/LaunchAgents" "$HOME/.local/state/aerospace"
+AGENT="sh.dotfiles.aerospace-bridge"
+sed "s|__HOME__|$HOME|g" "$DOTFILES/launchd/$AGENT.plist" \
+  > "$HOME/Library/LaunchAgents/$AGENT.plist"
+launchctl bootout "gui/$(id -u)/$AGENT" 2>/dev/null || true
+launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/$AGENT.plist" 2>/dev/null \
+  || warn "Could not load $AGENT - check with: launchctl print gui/$(id -u)/$AGENT"
+
+# --- Git hooks ------------------------------------------------------------
+
+if [ -d "$DOTFILES/.git" ]; then
+  git -C "$DOTFILES" config core.hooksPath githooks
+  log "Enabled the pre-commit hook"
+fi
+
 # --- Services -------------------------------------------------------------
 
 log "Starting sketchybar"
@@ -71,6 +91,7 @@ cat <<'STEPS'
 
 ────────────────────────────────────────────────────────────────────────
 Manual steps -- these need a GUI and cannot be scripted
+Run bin/doctor.sh afterwards; it verifies every one of them.
 ────────────────────────────────────────────────────────────────────────
 
 1. AeroSpace accessibility
@@ -98,6 +119,10 @@ Manual steps -- these need a GUI and cannot be scripted
 
 5. Automation permission for Music
    Prompts by itself the first time the now-playing chip polls Music. Allow it.
+
+Then check your work:
+
+    bin/doctor.sh
 
 ────────────────────────────────────────────────────────────────────────
 STEPS

@@ -210,6 +210,33 @@ brew bundle dump --file=~/.dotfiles/Brewfile --force
 Note that a dump is unsorted and uncommented — the checked-in `Brewfile` groups
 entries by purpose, so prefer editing it by hand.
 
+## How the bar gets its updates
+
+A launchd agent, `config/aerospace/event-bridge.sh`, subscribes to AeroSpace's
+event stream and translates it into SketchyBar triggers. It replaced ~40
+`exec-and-forget sketchybar --trigger` calls that previously had to be repeated
+on every binding, and it picks up `window-detected`, which no binding could
+provide.
+
+AeroSpace emits no event for a window *closing* or for one moved by id from a
+script, so `spaces_watcher` also polls every 5s as a backstop.
+
+Scripts run by `exec-and-forget` or a `click_script` have their stderr thrown
+away, so anything user-facing sources `config/aerospace/logging.sh`, which
+diverts stderr to `~/.local/state/aerospace/log` — but only when no terminal is
+attached, so running by hand still shows your errors.
+
+## Development
+
+```sh
+bin/doctor.sh           # is everything actually working?
+bin/check-launcher.sh   # is every entry point in the palette?
+launcher.sh --dry-run   # print the palette without a GUI
+```
+
+`githooks/pre-commit` runs shell syntax, shellcheck and the launcher check;
+`install.sh` points `core.hooksPath` at it. Skip with `--no-verify`.
+
 ## Notes worth keeping
 
 Things that cost real time to work out, recorded so they don't have to be

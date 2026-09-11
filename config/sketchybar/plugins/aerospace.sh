@@ -13,6 +13,7 @@
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 source "$CONFIG_DIR/colors.sh"
+# shellcheck source=/dev/null
 source "$CONFIG_DIR/plugins/icon_map.sh"
 
 # exec-on-workspace-change hands us the focused workspace; fall back to a query
@@ -29,6 +30,8 @@ while read -r ws; do
   while read -r app; do
     [ -z "$app" ] && continue
     __icon_map "$app"
+    # icon_result is set by __icon_map, in the sourced icon_map.sh
+    # shellcheck disable=SC2154
     icons="${icons}${icon_result}"
   done < <(printf '%s\n' "$WINDOWS" | awk -F'|' -v w="$ws" '$1 == w { print $2 }' | sort -u)
 

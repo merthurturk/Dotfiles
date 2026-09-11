@@ -15,6 +15,7 @@ set -u
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$DIR/logging.sh"
 source "$DIR/split-lib.sh"
 
 LOCAL_STATE="$HOME/Library/Application Support/Google/Chrome/Local State"
@@ -65,10 +66,23 @@ scene_of() {         # <workspace> -> scene name, or empty
 # --- list -----------------------------------------------------------------
 # Single source of truth for what scenes exist, so the launcher stays in sync.
 
-SCENES="chill messaging"
+SCENES_FILE="$DIR/scenes.json"
 
 if [ "${1:-}" = "--list" ]; then
-  printf '%s\n' $SCENES
+  jq -r 'keys[]' "$SCENES_FILE" 2>/dev/null
+  exit 0
+fi
+
+if [ "${1:-}" = "--describe" ]; then
+  # "<scene>\t<short summary of its windows>", for the launcher's detail column.
+  jq -r '
+    to_entries[]
+    | .key + "\t" + ([ .value.windows[]
+        | sub("^app:"; "")
+        | sub("^chrome-app:https?://(www\\.)?"; "")
+        | sub("^chrome:https?://(www\\.)?"; "")
+        | split(" ")[0] | split("/")[0] ] | join(" + "))
+  ' "$SCENES_FILE" 2>/dev/null
   exit 0
 fi
 
@@ -122,26 +136,28 @@ fi
 SCENE="${1:-chill}"
 PROFILE_NAME="${2:-}"
 
-# A scene is a list of window specs, left to right. Each spec is one of:
+# Scenes live in scenes.json, so adding one is data rather than code. Each
+# entry is a ratio plus a list of window specs, left to right:
 #   app:<App Name>     summon that app's window, launching it if not running
 #   chrome:<urls...>   a new Chrome window with those tabs
 #   chrome-app:<url>   a Chrome --app window: no tab strip, no toolbar
-# RATIO is the share of the width given to the first window.
-case "$SCENE" in
-  chill)
-    WINDOWS=("chrome:https://www.youtube.com https://x.com https://www.instagram.com"
-             "chrome-app:https://app.contextengine.com/chat")
-    RATIO=0.70
-    ;;
-  messaging)
-    WINDOWS=("app:WhatsApp" "app:Telegram")
-    RATIO=0.50
-    ;;
-  *)
-    echo "scene: unknown scene '$SCENE'" >&2
-    exit 1
-    ;;
-esac
+# ratio is the share of the width given to the first window.
+if ! jq -e --arg s "$SCENE" 'has($s)' "$SCENES_FILE" >/dev/null 2>&1; then
+  echo "scene: unknown scene '$SCENE'. Known:" >&2
+  jq -r 'keys[] | "  " + .' "$SCENES_FILE" >&2 2>/dev/null
+  exit 1
+fi
+
+RATIO="$(jq -r --arg s "$SCENE" '.[$s].ratio // 0.5' "$SCENES_FILE")"
+WINDOWS=()
+while IFS= read -r spec; do
+  [ -n "$spec" ] && WINDOWS+=("$spec")
+done < <(jq -r --arg s "$SCENE" '.[$s].windows[]' "$SCENES_FILE")
+
+if [ "${#WINDOWS[@]}" -eq 0 ]; then
+  echo "scene: '$SCENE' defines no windows" >&2
+  exit 1
+fi
 
 # Resolve the Chrome profile directory from its display name, else use Default.
 PROFILE_DIR=""
@@ -165,8 +181,9 @@ fi
 # workspace instead. So let them open wherever they land and move them by id.
 
 wait_new_window() {   # <sorted list of window ids that existed before>
-  local before="$1" new="" i
-  for i in $(seq 1 60); do
+  local before="$1" new=""
+  # shellcheck disable=SC2034  # counted loop; the index is deliberately unused
+  for _i in $(seq 1 60); do
     sleep 0.25
     new="$(comm -13 <(printf '%s\n' "$before") \
                     <($AEROSPACE list-windows --all --format '%{window-id}' | sort) \
