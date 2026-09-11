@@ -1,0 +1,25 @@
+# theme = Github Light High Contrast
+theme = Github Dark
+
+# Font
+font-family = Berkeley Mono
+font-size = 13
+
+# Window
+window-padding-x = 10
+window-padding-y = 10
+window-decoration = true
+macos-titlebar-style = tabs
+
+# Cursor
+cursor-style = bar
+cursor-style-blink = false
+
+# Quality of life
+copy-on-select = clipboard
+clipboard-read = allow
+clipboard-write = allow
+mouse-hide-while-typing = true
+
+# Naming
+shell-integration-features = no-title

@@ -1,0 +1,188 @@
+#!/usr/bin/env bash
+#
+# SketchyBar configuration for AeroSpace — Catppuccin Latte (light).
+#
+# Workspace pills are plain items (not mission-control `space` items) because
+# AeroSpace manages its own workspaces on a single macOS space. They are
+# refreshed as a batch by plugins/aerospace.sh, driven by the
+# `aerospace_workspace_change` event that ~/.aerospace.toml triggers.
+
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+export CONFIG_DIR="$HOME/.config/sketchybar"
+
+PLUGIN_DIR="$CONFIG_DIR/plugins"
+source "$CONFIG_DIR/colors.sh"
+
+FONT="Hack Nerd Font"
+APP_FONT="sketchybar-app-font:Regular:16.0"
+
+##### Geometry #####
+# macOS 26 draws window corners as squircles, not circles -- fitting the arc of
+# a native window on this display gives a superellipse of n≈4.5, which reads as
+# a ~16pt circular radius. sketchybar draws circular corners only, so 16 is the
+# value that visually matches.
+BAR_HEIGHT=36
+BAR_RADIUS=16
+
+# Concentric rounding: a nested radius is the outer radius minus the gap
+# between the two edges. That keeps inner and outer curves parallel instead of
+# drifting apart, which is what makes nested rounded rectangles look right.
+PILL_HEIGHT=26
+PILL_INSET=$(( (BAR_HEIGHT - PILL_HEIGHT) / 2 ))
+PILL_RADIUS=$(( BAR_RADIUS - PILL_INSET ))
+
+# The inset has to be uniform for the concentric rule to hold -- if a chip sits
+# 5pt from the top but 12pt from the side, its corner curve is no longer
+# parallel to the bar's and the nesting looks off. A chip's distance from the
+# bar edge is bar padding + item padding, so the bar's own padding is whatever
+# is left over after the per-item padding that spaces chips from each other.
+ITEM_PADDING=4
+BAR_PADDING=$(( PILL_INSET - ITEM_PADDING ))
+
+##### Bar #####
+# Opaque: a light bar over light window content needs the border and shadow to
+# read as a separate surface, and blur was causing recomposition flicker.
+
+sketchybar --bar height=$BAR_HEIGHT \
+                 position=top \
+                 sticky=on \
+                 padding_left=$BAR_PADDING \
+                 padding_right=$BAR_PADDING \
+                 margin=8 \
+                 y_offset=6 \
+                 corner_radius=$BAR_RADIUS \
+                 color="$BAR_COLOR" \
+                 border_width=1 \
+                 border_color="$BAR_BORDER_COLOR" \
+                 shadow=on
+
+##### Defaults #####
+
+default=(
+  padding_left=$ITEM_PADDING
+  padding_right=$ITEM_PADDING
+  icon.font="$FONT:Bold:15.0"
+  label.font="$FONT:Semibold:13.0"
+  icon.color="$TEXT"
+  label.color="$TEXT"
+  icon.padding_left=6
+  icon.padding_right=4
+  label.padding_left=4
+  label.padding_right=6
+  background.corner_radius=$PILL_RADIUS
+  background.height=$PILL_HEIGHT
+  background.border_width=1
+  background.border_color="$TRANSPARENT"
+)
+sketchybar --default "${default[@]}"
+
+##### AeroSpace workspaces #####
+
+sketchybar --add event aerospace_workspace_change
+
+for ws in $(aerospace list-workspaces --all); do
+  sketchybar --add item space."$ws" left \
+             --set space."$ws" \
+                   icon="$ws" \
+                   icon.padding_left=9 \
+                   icon.padding_right=5 \
+                   label.font="$APP_FONT" \
+                   label.padding_right=9 \
+                   label.y_offset=-1 \
+                   background.color="$WS_OCCUPIED_BG" \
+                   background.border_color="$WS_OCCUPIED_BORDER" \
+                   drawing=off \
+                   click_script="aerospace workspace $ws"
+done
+
+# Hidden driver item: one script call repaints every pill above.
+sketchybar --add item spaces_watcher left \
+           --set spaces_watcher drawing=off \
+                 script="$PLUGIN_DIR/aerospace.sh" \
+           --subscribe spaces_watcher aerospace_workspace_change \
+                                      front_app_switched \
+                                      space_windows_change \
+                                      display_change
+
+##### Binding mode indicator #####
+
+sketchybar --add item aerospace_mode left \
+           --set aerospace_mode drawing=off \
+                 icon="󰘳" \
+                 icon.color="$BASE" \
+                 label.color="$BASE" \
+                 label.font="$FONT:Bold:12.0" \
+                 background.color="$MAROON" \
+                 background.border_color="$MAROON"
+
+##### Front app #####
+
+sketchybar --add item separator left \
+           --set separator icon="│" \
+                 icon.color="$SURFACE2" \
+                 icon.font="$FONT:Regular:14.0" \
+                 label.drawing=off \
+                 padding_left=6 \
+                 padding_right=6
+
+sketchybar --add item front_app left \
+           --set front_app icon.font="$APP_FONT" \
+                 icon.color="$MAUVE" \
+                 label.font="$FONT:Bold:13.0" \
+                 label.color="$TEXT" \
+                 script="$PLUGIN_DIR/front_app.sh" \
+           --subscribe front_app front_app_switched
+
+##### Right side #####
+# Added right-to-left: focus ends up furthest right, music furthest left.
+
+sketchybar --add event focus_change
+
+sketchybar --add item focus right \
+           --set focus update_freq=5 \
+                 label.font="$FONT:Bold:13.0" \
+                 icon.padding_left=9 \
+                 icon.padding_right=9 \
+                 script="$PLUGIN_DIR/focus.sh" \
+                 click_script="$PLUGIN_DIR/focus_click.sh" \
+           --subscribe focus focus_change system_woke
+
+sketchybar --add item clock right \
+           --set clock update_freq=15 \
+                 icon="󰅐" \
+                 icon.color="$MAUVE" \
+                 label.font="$FONT:Bold:13.0" \
+                 script="$PLUGIN_DIR/clock.sh" \
+           --add item battery right \
+           --set battery update_freq=120 \
+                 script="$PLUGIN_DIR/battery.sh" \
+           --subscribe battery system_woke power_source_change \
+           --add item volume right \
+           --set volume icon.color="$TEAL" \
+                 script="$PLUGIN_DIR/volume.sh" \
+           --subscribe volume volume_change
+
+sketchybar --add bracket status volume battery clock \
+           --set status background.color="$GROUP_BG" \
+                 background.border_color="$GROUP_BORDER" \
+                 background.border_width=1 \
+                 background.corner_radius=$PILL_RADIUS \
+                 background.height=$PILL_HEIGHT
+
+##### Now playing #####
+
+sketchybar --add item music right \
+           --set music update_freq=5 \
+                 drawing=off \
+                 icon.padding_left=10 \
+                 label.padding_right=12 \
+                 background.color="$GROUP_BG" \
+                 background.border_color="$GROUP_BORDER" \
+                 script="$PLUGIN_DIR/music.sh" \
+                 click_script="$PLUGIN_DIR/music_click.sh" \
+           --subscribe music media_change
+
+##### Initial paint #####
+
+sketchybar --update
+"$PLUGIN_DIR/aerospace.sh"
