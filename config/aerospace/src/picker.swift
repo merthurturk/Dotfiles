@@ -37,6 +37,10 @@ func uiFont(_ size: CGFloat, bold: Bool = false) -> NSFont {
         ?? .systemFont(ofSize: size, weight: bold ? .semibold : .regular)
 }
 
+// How much vertical room the header takes, measured from the wrapped text so a
+// long plan doesn't overlap the field.
+var headerOffset: CGFloat = 0
+
 let OUTER_RADIUS: CGFloat = 16
 let ROW_INSET: CGFloat    = 8
 let ROW_RADIUS            = OUTER_RADIUS - ROW_INSET   // concentric
@@ -46,32 +50,15 @@ let FOOTER_H: CGFloat     = 30
 let WIDTH: CGFloat        = 540
 let MAX_ROWS              = 8
 
-// MARK: - Input
-
-struct Item { let label: String; let detail: String }
-
-var items: [Item] = []
-func ingest(_ lines: [String]) {
-    for raw in lines {
-        let line = raw.trimmingCharacters(in: .whitespaces)
-        if line.isEmpty { continue }
-        let parts = raw.components(separatedBy: "\t")
-        items.append(Item(label: parts[0].trimmingCharacters(in: .whitespaces),
-                          detail: parts.count > 1
-                              ? parts[1].trimmingCharacters(in: .whitespaces) : ""))
-    }
-}
-if CommandLine.arguments.count > 1,
-   let body = try? String(contentsOfFile: CommandLine.arguments[1], encoding: .utf8) {
-    ingest(body.components(separatedBy: "\n"))
-} else {
-    var lines: [String] = []
-    while let l = readLine(strippingNewline: true) { lines.append(l) }
-    ingest(lines)
-}
-if items.isEmpty { exit(1) }
-
 let promptText = ProcessInfo.processInfo.environment["PICKER_PROMPT"] ?? "Select"
+
+// PICKER_MODE=input turns the picker into a single text field -- same panel,
+// same fonts, same theme -- so callers never have to fall back to a stock
+// AppleScript dialog, which looks nothing like the rest of this setup.
+let inputMode = ProcessInfo.processInfo.environment["PICKER_MODE"] == "input"
+
+// Optional multi-line text shown above the field, e.g. a plan awaiting consent.
+let headerText = ProcessInfo.processInfo.environment["PICKER_HEADER"] ?? ""
 
 // MARK: - Frecency
 //
@@ -116,6 +103,44 @@ func frecency(_ label: String) -> Double {
     guard let h = history[label] else { return 0 }
     let ageDays = (Date().timeIntervalSince1970 - h.last) / 86_400
     return Double(h.count) * (1.0 / (1.0 + ageDays / 7.0))
+}
+
+headerOffset = measureHeader(headerText, width: WIDTH - 40)
+
+// MARK: - Input
+
+struct Item { let label: String; let detail: String }
+
+var items: [Item] = []
+func ingest(_ lines: [String]) {
+    for raw in lines {
+        let line = raw.trimmingCharacters(in: .whitespaces)
+        if line.isEmpty { continue }
+        let parts = raw.components(separatedBy: "\t")
+        items.append(Item(label: parts[0].trimmingCharacters(in: .whitespaces),
+                          detail: parts.count > 1
+                              ? parts[1].trimmingCharacters(in: .whitespaces) : ""))
+    }
+}
+if CommandLine.arguments.count > 1,
+   let body = try? String(contentsOfFile: CommandLine.arguments[1], encoding: .utf8) {
+    ingest(body.components(separatedBy: "\n"))
+} else {
+    var lines: [String] = []
+    while let l = readLine(strippingNewline: true) { lines.append(l) }
+    ingest(lines)
+}
+if items.isEmpty && !inputMode { exit(1) }
+
+func measureHeader(_ text: String, width: CGFloat) -> CGFloat {
+    if text.isEmpty { return 0 }
+    let f = NSFont(name: "BerkeleyMono-SemiCondensed", size: 12)
+        ?? NSFont.systemFont(ofSize: 12)
+    let box = (text as NSString).boundingRect(
+        with: NSSize(width: width, height: .greatestFiniteMagnitude),
+        options: [.usesLineFragmentOrigin, .usesFontLeading],
+        attributes: [.font: f])
+    return ceil(box.height) + 26
 }
 
 // MARK: - Fuzzy match (subsequence; lower score = tighter match)
@@ -217,9 +242,16 @@ final class Picker: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         bg.layer?.borderColor = cSurface.cgColor
         panel.contentView = bg
 
+        // --- optional header ---
+        let header = NSTextField(wrappingLabelWithString: headerText)
+        header.font = uiFont(12)
+        header.textColor = cSubtext
+        header.isSelectable = false
+        header.isHidden = headerText.isEmpty
+
         // --- search row ---
         let glyph = NSImageView()
-        glyph.image = NSImage(systemSymbolName: "magnifyingglass",
+        glyph.image = NSImage(systemSymbolName: inputMode ? "sparkles" : "magnifyingglass",
                               accessibilityDescription: nil)
         glyph.contentTintColor = cOverlay
         glyph.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 15,
@@ -253,26 +285,32 @@ final class Picker: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         let hint = NSTextField(labelWithString: "↑↓ navigate    ↵ select    esc cancel")
         hint.font = uiFont(11)
         hint.textColor = cOverlay
+        if inputMode { hint.stringValue = "↵ submit    esc cancel" }
 
-        for v in [glyph, field, rule, stack, empty, footerBar, hint] {
+        for v in [header, glyph, field, rule, stack, empty, footerBar, hint] {
             v.translatesAutoresizingMaskIntoConstraints = false
         }
-        [glyph, field, rule, stack, empty, footerBar].forEach { bg.addSubview($0) }
+        [header, glyph, field, rule, stack, empty, footerBar].forEach { bg.addSubview($0) }
         footerBar.addSubview(hint)
 
         NSLayoutConstraint.activate([
             // Centre the field vertically in its band -- an NSTextField draws
             // its text at the top of its frame, so filling the band leaves the
             // placeholder floating above centre.
+            header.topAnchor.constraint(equalTo: bg.topAnchor, constant: 16),
+            header.leadingAnchor.constraint(equalTo: bg.leadingAnchor, constant: 20),
+            header.trailingAnchor.constraint(equalTo: bg.trailingAnchor, constant: -20),
+
             glyph.leadingAnchor.constraint(equalTo: bg.leadingAnchor, constant: 18),
-            glyph.centerYAnchor.constraint(equalTo: bg.topAnchor, constant: FIELD_H / 2),
+            glyph.centerYAnchor.constraint(equalTo: bg.topAnchor,
+                                           constant: headerOffset + FIELD_H / 2),
             glyph.widthAnchor.constraint(equalToConstant: 18),
 
             field.leadingAnchor.constraint(equalTo: glyph.trailingAnchor, constant: 10),
             field.trailingAnchor.constraint(equalTo: bg.trailingAnchor, constant: -18),
             field.centerYAnchor.constraint(equalTo: glyph.centerYAnchor),
 
-            rule.topAnchor.constraint(equalTo: bg.topAnchor, constant: FIELD_H),
+            rule.topAnchor.constraint(equalTo: bg.topAnchor, constant: headerOffset + FIELD_H),
             rule.leadingAnchor.constraint(equalTo: bg.leadingAnchor),
             rule.trailingAnchor.constraint(equalTo: bg.trailingAnchor),
             rule.heightAnchor.constraint(equalToConstant: 1),
@@ -309,6 +347,7 @@ final class Picker: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     func rebuild() {
         rows.forEach { stack.removeArrangedSubview($0); $0.removeFromSuperview() }
         rows = []
+        if inputMode { empty.isHidden = true; resize(); return }
         for (i, item) in shown.prefix(MAX_ROWS).enumerated() {
             let r = RowView()
             r.label.stringValue = item.label
@@ -324,10 +363,16 @@ final class Picker: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     }
 
     func resize() {
-        let listH = rows.isEmpty ? 52
+        let listH: CGFloat
+        if inputMode {
+            listH = 0
+        } else {
+            listH = rows.isEmpty ? 52
                                  : CGFloat(rows.count) * ROW_H
                                    + CGFloat(max(rows.count - 1, 0)) * 2
-        let h = FIELD_H + 1 + ROW_INSET + listH + ROW_INSET + FOOTER_H
+        }
+        let h = headerOffset + FIELD_H + 1 + (inputMode ? 0 : ROW_INSET)
+                + listH + (inputMode ? 8 : ROW_INSET) + FOOTER_H
         guard let screen = NSScreen.main else { return }
         let v = screen.visibleFrame
         panel.setFrame(NSRect(x: v.midX - WIDTH / 2,
@@ -345,6 +390,7 @@ final class Picker: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     }
 
     func controlTextDidChange(_ obj: Notification) {
+        if inputMode { return }
         let q = field.stringValue
         if q.isEmpty {
             // No query: most-used first, original order for anything unused.
@@ -371,6 +417,12 @@ final class Picker: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     }
 
     func accept() {
+        if inputMode {
+            let typed = field.stringValue.trimmingCharacters(in: .whitespaces)
+            if typed.isEmpty { cancel(); return }
+            FileHandle.standardOutput.write((typed + "\n").data(using: .utf8)!)
+            exit(0)
+        }
         guard sel < shown.count, !rows.isEmpty else { cancel(); return }
         recordChoice(shown[sel].label)
         FileHandle.standardOutput.write((shown[sel].label + "\n").data(using: .utf8)!)

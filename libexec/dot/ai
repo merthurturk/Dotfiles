@@ -27,18 +27,14 @@ command -v claude >/dev/null 2>&1 || { echo "dot ai: claude CLI not found" >&2; 
 ASSUME_YES=0
 [ "${1:-}" = "--yes" ] && { ASSUME_YES=1; shift; }
 
+PICKER="$DOT_ROOT/config/aerospace/bin/picker"
+
 REQUEST="$*"
 if [ -z "$REQUEST" ]; then
-  REQUEST="$(osascript -l JavaScript -e '
-    function run() {
-      var a = Application.currentApplication(); a.includeStandardAdditions = true;
-      a.activate();
-      try {
-        return a.displayDialog("What do you want to change?", {
-          defaultAnswer: "", withTitle: "dot ai", buttons: ["Cancel","Ask"],
-          defaultButton: "Ask"}).textReturned;
-      } catch (e) { return ""; }
-    }' 2>/dev/null)"
+  # Same panel as the palette rather than a stock AppleScript dialog, which
+  # looks nothing like the rest of this setup.
+  REQUEST="$(PICKER_MODE=input PICKER_PROMPT="What do you want to change?" \
+             "$PICKER" </dev/null)"
 fi
 [ -n "$REQUEST" ] || exit 0
 
@@ -95,16 +91,13 @@ if [ "$ASSUME_YES" -eq 0 ]; then
     printf '\nRun this? [y/N] '; read -r reply
     case "$reply" in y|Y|yes) ;; *) echo "aborted"; exit 0 ;; esac
   else
-    # Fail closed. Without a terminal the only valid consent is the dialog
-    # explicitly returning "Run"; anything else -- no GUI, an error, a stray
-    # zero exit -- aborts. An agent path must never run on ambiguity.
-    answer="$(osascript -e "display dialog \"Run this plan?
-
-$PLAN\" buttons {\"Cancel\",\"Run\"} default button \"Cancel\" with title \"dot ai\"" 2>/dev/null)"
-    case "$answer" in
-      *"button returned:Run"*) ;;
-      *) echo "aborted"; exit 0 ;;
-    esac
+    # Fail closed: the only valid consent is the picker returning exactly "Run".
+    # No GUI, an error, an empty result or a stray zero exit all abort. An agent
+    # path must never proceed on ambiguity.
+    answer="$(printf 'Cancel\nRun\n' \
+      | PICKER_PROMPT="Confirm" PICKER_HEADER="$(printf 'Run this plan?\n\n%s' "$PLAN")" \
+        "$PICKER")"
+    [ "$answer" = "Run" ] || { echo "aborted"; exit 0; }
   fi
 fi
 
