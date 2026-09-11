@@ -1,42 +1,96 @@
 #!/usr/bin/env bash
 #
-# dot ai "<request>" -- describe what you want; Claude proposes dot commands.
+# dot ai [--plan] [--yes] [request]
 #
-# Claude is given the capabilities manifest and constrained to emitting `dot`
-# commands, so the blast radius is whatever `dot` can already do -- no arbitrary
-# shell. Proposals are shown and confirmed before anything runs, destructive
-# ones are called out, and everything executed is audited.
+# Default: opens a real Claude Code session in a Ghostty window beside the
+# focused one, in this repo, with your request as the opening message. That
+# session has the whole toolkit -- it can read the configs, run `dot`, check
+# what actually happened and iterate -- which a one-shot planner cannot.
+#
+# --plan: the constrained path instead. Claude gets only the capability
+# manifest, may emit only `dot` commands, and the plan is confirmed before
+# anything runs. Useful when you want a deterministic action, not a
+# conversation.
 
 set -u
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+# shellcheck source=/dev/null
+source "$DOT_ROOT/config/aerospace/split-lib.sh"
+
+GHOSTTY=/Applications/Ghostty.app/Contents/MacOS/ghostty
+PICKER="$DOT_ROOT/config/aerospace/bin/picker"
 
 if [ "${1:-}" = "--describe" ]; then
   jq -n '{
     id: "ai",
-    summary: "Ask Claude to change something, in plain language",
-    args: [{name:"request", required:false}, {name:"--yes", required:false}],
+    summary: "Ask Claude to change or explain something",
+    args: [{name:"--plan", required:false}, {name:"--yes", required:false},
+           {name:"request", required:false}],
     destructive: false,
-    guard: "proposals are confirmed before running and restricted to dot commands",
-    instances: [{label:"Ask Claude to change something…", detail:"natural language", args:[]}]
+    guard: "a session runs with your normal Claude Code permissions; --plan is restricted to dot commands and confirmed first",
+    instances: [
+      {label: "Ask Claude…", detail: "opens a session beside this window", args: []},
+      {label: "Ask Claude for a plan…", detail: "dot commands only, confirmed", args: ["--plan"]}
+    ]
   }'
   exit 0
 fi
 
 command -v claude >/dev/null 2>&1 || { echo "dot ai: claude CLI not found" >&2; exit 1; }
 
-ASSUME_YES=0
-[ "${1:-}" = "--yes" ] && { ASSUME_YES=1; shift; }
-
-PICKER="$DOT_ROOT/config/aerospace/bin/picker"
+PLAN_MODE=0; ASSUME_YES=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --plan) PLAN_MODE=1; shift ;;
+    --yes)  ASSUME_YES=1; shift ;;
+    *) break ;;
+  esac
+done
 
 REQUEST="$*"
 if [ -z "$REQUEST" ]; then
-  # Same panel as the palette rather than a stock AppleScript dialog, which
-  # looks nothing like the rest of this setup.
-  REQUEST="$(PICKER_MODE=input PICKER_PROMPT="What do you want to change?" \
+  REQUEST="$(PICKER_MODE=input \
+             PICKER_PROMPT="$([ "$PLAN_MODE" -eq 1 ] && echo "What should I plan?" || echo "Ask Claude…")" \
              "$PICKER" </dev/null)"
 fi
 [ -n "$REQUEST" ] || exit 0
+
+# --- interactive session (default) ----------------------------------------
+
+if [ "$PLAN_MODE" -eq 0 ]; then
+  [ -x "$GHOSTTY" ] || { echo "dot ai: Ghostty not found at $GHOSTTY" >&2; exit 1; }
+  audit "ai session: $REQUEST"
+
+  ORIG_WID="$($AEROSPACE list-windows --focused --format '%{window-id}')"
+  BEFORE="$($AEROSPACE list-windows --all --format '%{window-id}' | sort)"
+
+  # printf %q so a request with quotes or spaces survives the shell.
+  "$GHOSTTY" --working-directory="$DOT_ROOT" --title="dot ai" \
+             -e /bin/bash -lc "claude $(printf '%q' "$REQUEST")" &
+
+  NEW=""
+  for _i in $(seq 1 60); do
+    sleep 0.25
+    NEW="$(comm -13 <(printf '%s\n' "$BEFORE") \
+                    <($AEROSPACE list-windows --all --format '%{window-id}' | sort) \
+           | head -1)"
+    [ -n "$NEW" ] && break
+  done
+  [ -n "$NEW" ] || { echo "dot ai: session window never appeared" >&2; exit 1; }
+
+  # Sit it beside whatever you were looking at, so you can watch it work.
+  if [ -n "$ORIG_WID" ] && [ "$ORIG_WID" != "$NEW" ]; then
+    $AEROSPACE move-node-to-workspace --window-id "$NEW" \
+      "$($AEROSPACE list-workspaces --focused)" 2>/dev/null
+    $AEROSPACE layout tiling --window-id "$NEW" >/dev/null 2>&1 || true
+    $AEROSPACE layout tiles  --window-id "$NEW" >/dev/null 2>&1 || true
+    sleep 0.5
+    split_resize "$ORIG_WID" 0.6 || true
+  fi
+  exit 0
+fi
+
+# --- constrained plan (--plan) --------------------------------------------
 
 CAPS="$("$DOT_ROOT/bin/dot" capabilities --json)"
 
@@ -58,15 +112,15 @@ if [ -z "$PLAN" ] || [ "$PLAN" = "CANNOT" ]; then
   exit 1
 fi
 
-# Refuse anything that isn't a dot command we actually have.
 while IFS= read -r line; do
   [ -n "$line" ] || continue
   case "$line" in
     "dot "*) ;;
     *) echo "dot ai: refusing non-dot command: $line" >&2; exit 1 ;;
   esac
+  # shellcheck disable=SC2086  # deliberate splitting to inspect the verb
   set -- $line
-  if ! printf '%s' "$CAPS" | jq -e --arg c "$1 $2 $3" --arg c2 "$1 $2" \
+  if ! printf '%s' "$CAPS" | jq -e --arg c "$1 ${2:-} ${3:-}" --arg c2 "$1 ${2:-}" \
        'map(.command) | index($c) != null or index($c2) != null' >/dev/null; then
     echo "dot ai: refusing unknown command: $line" >&2; exit 1
   fi
@@ -75,25 +129,14 @@ $PLAN
 EOF
 
 echo "Plan:"
-while IFS= read -r line; do
-  [ -n "$line" ] || continue
-  warn=""
-  printf '%s' "$CAPS" | jq -e --arg l "$line" \
-    'map(select(.destructive == true) | .command) | any(. as $c | $l | startswith($c))' \
-    >/dev/null 2>&1 && warn="   [destructive]"
-  printf '  %s%s\n' "$line" "$warn"
-done <<EOF
-$PLAN
-EOF
+printf '%s\n' "$PLAN" | sed 's/^/  /'
 
 if [ "$ASSUME_YES" -eq 0 ]; then
   if [ -t 0 ]; then
     printf '\nRun this? [y/N] '; read -r reply
     case "$reply" in y|Y|yes) ;; *) echo "aborted"; exit 0 ;; esac
   else
-    # Fail closed: the only valid consent is the picker returning exactly "Run".
-    # No GUI, an error, an empty result or a stray zero exit all abort. An agent
-    # path must never proceed on ambiguity.
+    # Fail closed: only an explicit "Run" proceeds.
     answer="$(printf 'Cancel\nRun\n' \
       | PICKER_PROMPT="Confirm" PICKER_HEADER="$(printf 'Run this plan?\n\n%s' "$PLAN")" \
         "$PICKER")"

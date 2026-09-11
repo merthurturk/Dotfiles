@@ -251,6 +251,7 @@ done
 for wid in "${WIDS[@]}"; do
   $AEROSPACE move-node-to-workspace --window-id "$wid" "$WS"
   $AEROSPACE layout --window-id "$wid" tiling >/dev/null 2>&1 || true
+  $AEROSPACE layout --window-id "$wid" tiles  >/dev/null 2>&1 || true
 done
 $AEROSPACE workspace "$WS"
 sleep 0.4

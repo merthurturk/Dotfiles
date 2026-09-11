@@ -73,9 +73,12 @@ split_resize() {
                 'BEGIN { printf "%d", w * r + 0.5 + g / 2 }')"
 
   # `resize` refuses floating windows (AeroSpace issue #9), and an app can open
-  # one floating without warning -- which failed silently until stderr started
-  # being logged. Tiling first is a no-op when it's already tiled.
+  # one floating without warning. It also refuses when the workspace has drifted
+  # into an accordion root, which has happened twice here without anyone asking
+  # for it. A split is by definition a tiles layout, so assert both -- each is a
+  # no-op when already true.
   $AEROSPACE layout --window-id "$wid" tiling >/dev/null 2>&1 || true
+  $AEROSPACE layout --window-id "$wid" tiles  >/dev/null 2>&1 || true
 
   if ! $AEROSPACE resize --window-id "$wid" width "$target" 2>/dev/null; then
     echo "split: couldn't resize window $wid -- it may be alone on its workspace" >&2

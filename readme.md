@@ -118,13 +118,23 @@ A descriptor looks like this, and lives next to the code it describes:
 ### Asking in plain language
 
 ```sh
-dot ai "put chrome next to this window and turn on do not disturb"
+dot ai "why isn't my focus chip toggling?"
 ```
 
-Claude gets the manifest and is constrained to emitting `dot` commands — no
-arbitrary shell. The plan is shown, destructive steps are flagged, and it asks
-before running. Without a terminal it requires an explicit dialog confirmation
-and **fails closed** on anything else.
+Opens a real Claude Code session in a Ghostty window **beside** the focused one,
+in this repo, with your request as the opening message. It has the full toolkit:
+it can read the configs, run `dot`, check what actually happened and iterate —
+which a one-shot planner can't.
+
+```sh
+dot ai --plan "turn on do not disturb and open my messaging scene"
+```
+
+The constrained path instead: Claude gets only the capability manifest, may emit
+only `dot` commands, and the plan is shown with destructive steps flagged before
+anything runs. Without a terminal it requires an explicit confirmation and
+**fails closed** on anything else. Use it when you want a deterministic action
+rather than a conversation.
 
 ## The command palette — ⌥space
 
