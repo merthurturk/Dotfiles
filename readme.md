@@ -3,7 +3,7 @@
 macOS setup: [AeroSpace](https://nikitabobko.github.io/AeroSpace/) tiling driving
 [SketchyBar](https://felixkratz.github.io/SketchyBar/), themed
 [Catppuccin Latte](https://github.com/catppuccin/catppuccin) (light), plus
-Ghostty, Karabiner and VS Code config.
+Ghostty.
 
 ## Install on a new Mac
 
@@ -25,8 +25,6 @@ that remain. It is re-runnable: anything it would overwrite is moved to
 | `config/aerospace/` | `~/.config/aerospace/` |
 | `config/sketchybar/` | `~/.config/sketchybar/` |
 | `config/ghostty/` | `~/.config/ghostty/` |
-| `karabiner.json` | `~/.config/karabiner/karabiner.json` |
-| `visual-studio-code/*.json` | `~/Library/Application Support/Code/User/` |
 
 Anything added under `config/` is linked to `~/.config/<name>` automatically —
 no edit to `install.sh` needed.
@@ -73,16 +71,6 @@ Rebuild after editing:
 ```sh
 swiftc -O -o ~/.config/aerospace/bin/picker \
           ~/.config/aerospace/src/picker.swift -framework AppKit
-```
-
-## VS Code extensions
-
-Symlinking `settings.json` and `keybindings.json` is handled by `install.sh`.
-Extensions are a separate list:
-
-```sh
-./bin/install_vscode_extensions.sh   # install everything in vscode_extensions.txt
-./bin/save_vscode_extensions.sh      # refresh that list from what's installed
 ```
 
 ## Updating the Brewfile

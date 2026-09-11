@@ -1,4 +1,5 @@
-# Compiled from src/picker.swift by install.sh
+# Compiled from config/aerospace/src/picker.swift by install.sh
 config/aerospace/bin/
 
+.idea/
 .DS_Store

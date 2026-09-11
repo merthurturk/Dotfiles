@@ -47,14 +47,6 @@ for dir in "$DOTFILES"/config/*/; do
   link "${dir%/}" "$HOME/.config/$(basename "$dir")"
 done
 
-link "$DOTFILES/karabiner.json" "$HOME/.config/karabiner/karabiner.json"
-
-VSCODE_USER="$HOME/Library/Application Support/Code/User"
-link "$DOTFILES/visual-studio-code/settings.json"    "$VSCODE_USER/settings.json"
-link "$DOTFILES/visual-studio-code/keybindings.json" "$VSCODE_USER/keybindings.json"
-
-chmod +x "$DOTFILES"/bin/*.sh 2>/dev/null || true
-
 # --- Compiled helpers -----------------------------------------------------
 
 if command -v swiftc >/dev/null 2>&1; then
@@ -106,13 +98,6 @@ Manual steps -- these need a GUI and cannot be scripted
 
 5. Automation permission for Music
    Prompts by itself the first time the now-playing chip polls Music. Allow it.
-
-6. VS Code extensions
-   Settings and keybindings are symlinked already; the extension list is not.
-   Run:  ./bin/install_vscode_extensions.sh
-
-7. Karabiner-Elements
-   Grant it Input Monitoring when it asks, then pick the "Dotfiles" profile.
 
 ────────────────────────────────────────────────────────────────────────
 STEPS
