@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+#
+# Window outlines. JankyBorders reads this file when it starts with no
+# arguments, and -- because a second invocation updates the running instance
+# rather than starting another -- re-running it is also how a theme change
+# reaches the borders. That is what `dot theme set` does.
+#
+# Colours come from the active theme, through the same symlink the bar reads,
+# so an outline can't be on a different palette than the pill that matches it.
+
+# shellcheck source=/dev/null
+source "$HOME/.config/sketchybar/colors.sh"
+
+borders \
+  style=round \
+  width=4.0 \
+  hidpi=on \
+  active_color="$WINDOW_BORDER_ACTIVE" \
+  inactive_color="$WINDOW_BORDER_INACTIVE"

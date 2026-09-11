@@ -1,9 +1,11 @@
 # dotfiles
 
 macOS setup: [AeroSpace](https://nikitabobko.github.io/AeroSpace/) tiling driving
-[SketchyBar](https://felixkratz.github.io/SketchyBar/), themed
-[Catppuccin Latte](https://github.com/catppuccin/catppuccin) (light). Ghostty
-uses the same palette, so terminal and bar are one surface.
+[SketchyBar](https://felixkratz.github.io/SketchyBar/), themed **Opal White** —
+pale surfaces, colour kept for the things that carry meaning, and edges drawn
+rather than shadows cast. The palette derives from
+[Catppuccin Latte](https://github.com/catppuccin/catppuccin). Ghostty reads the
+same file, so terminal and bar are one surface.
 
 ## Install on a new Mac
 
@@ -315,6 +317,33 @@ as a fill, and Rosé Pine Dawn's gold 2.05:1. Beautiful for syntax highlighting,
 unusable for a chip with a label on it.
 
 Ghostty picks up a theme change on its next config reload (⌘⇧, in a terminal).
+
+The desktop picture and the screen saver follow too. There is no image file in
+the repo: one is rendered from the theme's own `colors.sh` at your display's
+pixel size — a light wash of the theme's accents, quiet in the middle where the
+windows go — and set as both the wallpaper and the screen saver.
+
+```sh
+dot theme wallpaper            # re-render for the current theme
+dot theme wallpaper --show     # what macOS actually has set
+dot theme wallpaper --restore  # back to what you had before
+```
+
+macOS 14 moved both into one store and left the screen saver half with no
+public API, so the first run copies that store aside before editing it.
+
+### Outlines, not shadows
+
+Nothing here floats above anything else. The bar draws a 1px border with its
+shadow off, chips outline themselves when they mean something, and
+[JankyBorders](https://github.com/FelixKratz/JankyBorders) outlines each window
+— focused windows in the same accent as the focused workspace pill, so "where
+am I" is one colour wherever you look. Screenshot drop shadows are off too.
+
+macOS's own window drop shadow is the one that stays. It can be read but not
+written from an unprivileged process — three different SkyLight calls all
+report success and change nothing. Removing it needs yabai's scripting
+addition, which requires partially disabling SIP.
 
 ## Development
 

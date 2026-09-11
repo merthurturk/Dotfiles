@@ -25,6 +25,82 @@ So the user must make a shortcut by hand. `focus_click.sh` accepts either a
 `Focus On`/`Focus Off` pair (preferred — the bar picks the direction from state
 it already reads) or a single `Toggle Focus`.
 
+## The wallpaper store has no API for half of itself
+
+macOS 14 replaced the desktop-picture defaults with one store holding both the
+desktop image and the screen saver, per display and per space:
+
+```
+~/Library/Application Support/com.apple.wallpaper/Store/Index.plist
+```
+
+`NSWorkspace.setDesktopImageURL` writes the desktop half. **Nothing public
+writes the screen saver half**, so `dot theme wallpaper` edits the store — but
+it never builds an entry by hand: it copies the desktop entry macOS itself just
+wrote, so the schema is always the OS's own. The whole store is copied to
+`~/.local/state/aerospace/wallpaper/Index.plist.before-dot` before the first
+edit, and `--restore` puts it back.
+
+Three things that cost real time here:
+
+- **The API lies, in both directions.** `setDesktopImageURL` returns success
+  whether or not anything changed, and `desktopImageURL(for:)` goes on
+  reporting `DefaultDesktop.heic` after a successful change. The store on disk
+  is the only truth; `dot theme wallpaper --show` prints it.
+- **WallpaperAgent writes the store asynchronously**, a moment after the call
+  returns. Reading it too early gets the old contents, and *writing* it too
+  early loses the change — which is how the screen saver first ended up
+  pointing at a stale image. The capability waits for the desktop entry to
+  appear before touching anything, then restarts the agent so it reloads the
+  file rather than overwriting it from memory.
+- **Entries survive their displays.** The store accumulates a node per display
+  UUID ever attached, and the API only reaches the connected ones, so a
+  disconnected monitor keeps serving the image it last saw. The capability
+  copies one canonical choice over every node, present or not.
+
+A still image is a valid screen saver as far as the store is concerned — the
+screen simply keeps showing the wallpaper. The alternatives were not close:
+every built-in module (Drift, Flurry, Arabesque, Hello, Shell) is a dark
+animation, and none of them take a colour from the theme.
+
+## Window shadows can't be turned off from here
+
+macOS exposes no setting for the drop shadow it draws on every window, and
+AeroSpace has no key for it — `aerospace config --all-keys` has neither
+`shadow` nor `border`. SkyLight does have the state, and it is readable:
+
+```c
+SLSGetWindowShadowAndRimParameters(cid, wid, &std_dev, &density, &x, &y, ...)
+```
+
+An ordinary macOS 26 window reads `std_dev=32.94, density=0.4, offset=(0,18)`.
+
+**Writing it does nothing.** Three separate routes were tried against that
+getter, on windows belonging to Chrome, Ghostty, Telegram and System Settings:
+
+| Call | Result | Parameters after |
+|---|---|---|
+| `SLSWindowSetShadowProperties(wid, {density: 0})` | returns 0 | unchanged |
+| `SLSSetWindowShadowParameters(cid, wid, 0, 0, 0, 0)` | returns 0 | unchanged |
+| `SLSTransactionSetWindow[System]ShadowProperties` + commit | returns 0 | unchanged |
+
+Every one of them reports success. This is the sharpest example in the whole
+setup of why **exit codes are not verification** — without the getter, all
+three look like they worked, and the only contrary evidence is that the screen
+doesn't change.
+
+The one process whose windows *do* read `density=0.0` is `borders`, on windows
+it owns itself. Shadow writes appear to be honoured only for a connection's own
+windows, which is consistent with yabai needing its scripting addition — an
+injection into Dock.app that requires SIP to be partially disabled — to manage
+shadows for other applications.
+
+So the shadow stays, and this setup outlines instead. The two shadows that
+*aren't* window-server state are off: the bar's (`shadow=off` in
+`sketchybarrc`) and the one macOS bakes into window screenshots
+(`com.apple.screencapture disable-shadow`, set by `install.sh`). `dot doctor`
+checks both.
+
 ## bash is 3.2
 
 `/bin/bash` is 3.2 from 2007. **No associative arrays**: `declare -A` fails and

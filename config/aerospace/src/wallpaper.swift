@@ -124,6 +124,74 @@ func render(width: Int, height: Int, base: CGColor, deep: CGColor,
                             format: .RGBA8, colorSpace: space)!
 }
 
+// MARK: - The wallpaper store
+//
+// macOS 14 replaced the old desktop-picture defaults with a single store that
+// holds both the desktop image and the screen saver ("Idle"), per display and
+// per space:
+//
+//   ~/Library/Application Support/com.apple.wallpaper/Store/Index.plist
+//
+// There is no public API for the Idle half -- NSWorkspace only sets the
+// desktop. So `link-idle` copies the Desktop node macOS itself just wrote over
+// the Idle node, which means the schema is never hand-built: whatever the OS
+// considers a valid choice is what gets written back.
+
+let storeURL = FileManager.default.homeDirectoryForCurrentUser
+    .appendingPathComponent("Library/Application Support/com.apple.wallpaper/Store/Index.plist")
+
+func die(_ msg: String) -> Never {
+    FileHandle.standardError.write("wallpaper: \(msg)\n".data(using: .utf8)!)
+    exit(1)
+}
+
+func loadStore() -> NSMutableDictionary {
+    guard let data = try? Data(contentsOf: storeURL),
+          let obj = try? PropertyListSerialization.propertyList(
+              from: data, options: [], format: nil),
+          let dict = obj as? NSDictionary
+    else { die("could not read \(storeURL.path)") }
+    return deepCopy(dict)
+}
+
+/// A true deep mutable copy -- mutableCopy() is one level only.
+func deepCopy(_ d: NSDictionary) -> NSMutableDictionary {
+    guard let data = try? PropertyListSerialization.data(
+              fromPropertyList: d, format: .binary, options: 0),
+          let obj = try? PropertyListSerialization.propertyList(
+              from: data, options: [.mutableContainersAndLeaves], format: nil),
+          let copy = obj as? NSMutableDictionary
+    else { die("could not copy the wallpaper store") }
+    return copy
+}
+
+/// Visit every dictionary in the tree.
+func visit(_ node: Any, _ body: (NSMutableDictionary) -> Void) {
+    if let d = node as? NSMutableDictionary {
+        body(d)
+        for v in d.allValues { visit(v, body) }
+    } else if let a = node as? NSArray {
+        for v in a { visit(v, body) }
+    }
+}
+
+/// provider + image path of a Desktop/Idle node, for reporting.
+func describeChoice(_ node: Any?) -> (provider: String, path: String?) {
+    guard let d = node as? NSDictionary,
+          let choice = ((d["Content"] as? NSDictionary)?["Choices"] as? NSArray)?
+              .firstObject as? NSDictionary
+    else { return ("none", nil) }
+    let provider = (choice["Provider"] as? String) ?? "unknown"
+    var path: String? = nil
+    if let cfg = choice["Configuration"] as? Data,
+       let inner = try? PropertyListSerialization.propertyList(
+           from: cfg, options: [], format: nil) as? NSDictionary,
+       let url = (inner["url"] as? NSDictionary)?["relative"] as? String {
+        path = URL(string: url)?.path ?? url
+    }
+    return (provider, path)
+}
+
 // MARK: - Commands
 
 func writePNG(_ image: CGImage, to path: String) {
@@ -145,6 +213,8 @@ func usage() -> Never {
     FileHandle.standardError.write("""
     usage: wallpaper render <out.png> <WxH> <base> <deep> <accent>...
            wallpaper set <image.png>
+           wallpaper propagate <desktop|both>
+           wallpaper store
            wallpaper size
 
     """.data(using: .utf8)!)
@@ -193,6 +263,63 @@ case "set":
         }
     }
     print(url.path)
+
+case "propagate":
+    // Copy the desktop choice macOS just wrote over every other entry in the
+    // store: the other displays (including ones not currently attached, which
+    // the public API cannot reach and which would otherwise keep serving a
+    // stale image when they come back), and -- with "both" -- the screen
+    // saver, which has no public API at all.
+    //
+    // Nothing here is hand-built. Whatever shape the OS considers a valid
+    // choice is the shape that gets written back.
+    guard args.count == 3, ["desktop", "both"].contains(args[2]) else { usage() }
+    let both = args[2] == "both"
+    let root = loadStore()
+    guard let canonical = root.value(forKeyPath: "SystemDefault.Desktop") as? NSDictionary
+    else { die("the store has no SystemDefault.Desktop to copy from") }
+    var patched = 0
+    visit(root) { node in
+        if node["Desktop"] != nil {
+            node["Desktop"] = deepCopy(canonical); patched += 1
+        }
+        if both, node["Idle"] != nil {
+            node["Idle"] = deepCopy(canonical); patched += 1
+            // A node holding both halves must say they are set independently,
+            // or the OS goes on serving them as a linked pair.
+            if node["Type"] != nil && node["Desktop"] != nil {
+                node["Type"] = "individual"
+            }
+        }
+    }
+    guard patched > 0 else { die("no entries found in the store") }
+    guard let out = try? PropertyListSerialization.data(
+            fromPropertyList: root, format: .binary, options: 0)
+    else { die("could not serialise the store") }
+    do { try out.write(to: storeURL) }
+    catch { die(error.localizedDescription) }
+    print("patched \(patched)")
+
+case "store":
+    // What the world actually contains -- the caller verifies against this,
+    // never against an exit code.
+    let root = loadStore()
+    var rows: [String] = []
+    func report(_ label: String, _ node: NSMutableDictionary) {
+        for half in ["Desktop", "Idle"] where node[half] != nil {
+            let c = describeChoice(node[half])
+            rows.append("\(label)\t\(half)\t\(c.provider)\t\(c.path ?? "-")")
+        }
+    }
+    for key in ["SystemDefault", "AllSpacesAndDisplays"] {
+        if let n = root[key] as? NSMutableDictionary { report(key, n) }
+    }
+    if let displays = root["Displays"] as? NSMutableDictionary {
+        for (k, v) in displays {
+            if let n = v as? NSMutableDictionary { report("Display:\(k)", n) }
+        }
+    }
+    print(rows.joined(separator: "\n"))
 
 default:
     usage()

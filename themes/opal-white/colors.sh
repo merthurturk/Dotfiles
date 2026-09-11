@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
 #
-# Catppuccin Latte — light theme.
-# Accents are the Latte variants, which are darkened relative to Mocha so they
-# stay legible on an off-white bar.
+# Opal White — the pale one.
+#
+# Milky surfaces with a little blue and violet in them, and colour kept for
+# the things that carry meaning. The palette derives from Catppuccin Latte;
+# `ghostty_theme` in meta.json still names the upstream, because that is what
+# Ghostty ships and knows how to load. Everything else here has moved on from
+# it: accents darkened to pass contrast, badge triplets added, and the bar
+# given no surface at all.
+#
+# This is the root of the Opal family. A variant copies this directory and
+# changes colours -- not scripts.
 
 # Surfaces, lightest to darkest
 export BASE=0xffeff1f5      # bar background
@@ -37,8 +45,13 @@ export LAVENDER=0xff7287fd
 export TRANSPARENT=0x00000000
 
 # Bar
-export BAR_COLOR=$BASE
-export BAR_BORDER_COLOR=0xffbcc0cc
+#
+# No surface of its own: the bar draws nothing, and the chips on it float
+# directly over the wallpaper. The wallpaper is generated from this same file,
+# so the thing behind the chips is a known quantity rather than whatever
+# happened to be on screen.
+export BAR_COLOR=$TRANSPARENT
+export BAR_BORDER_COLOR=$TRANSPARENT
 
 # Grouped status items on the right
 export GROUP_BG=$MANTLE
@@ -76,3 +89,13 @@ export BADGE_BLUE_DEEP=0xff1e40af
 export BADGE_GREEN_TINT=0xffdcefd6
 export BADGE_GREEN_EDGE=0xffcadbc4
 export BADGE_GREEN_DEEP=0xff2d6a1f
+
+# Window outlines (JankyBorders).
+#
+# This theme draws edges, not shadows: the focused window gets the same blue as
+# the focused workspace pill, so "where am I" is one colour everywhere. The
+# unfocused outline is SURFACE1 -- the same value the bar uses for its own
+# borders, and light enough to separate a window from the wallpaper without
+# ruling a line around everything on screen.
+export WINDOW_BORDER_ACTIVE=$BLUE
+export WINDOW_BORDER_INACTIVE=$SURFACE1

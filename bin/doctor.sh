@@ -31,6 +31,7 @@ done
 
 head_ "Packages"
 command -v sketchybar >/dev/null && ok "sketchybar" || no "sketchybar missing - brew bundle"
+command -v borders >/dev/null && ok "borders (window outlines)" || no "borders missing - brew bundle"
 [ -d /Applications/AeroSpace.app ] && ok "AeroSpace.app" || no "AeroSpace.app missing"
 
 head_ "Fonts"
@@ -49,6 +50,7 @@ font_present() {
 
 head_ "Services"
 pgrep -x sketchybar >/dev/null && ok "sketchybar running" || no "sketchybar not running - brew services start sketchybar"
+pgrep -x borders >/dev/null && ok "borders running" || no "borders not running - brew services start borders"
 pgrep -f "AeroSpace.app" >/dev/null && ok "AeroSpace running" || no "AeroSpace not running - open -a AeroSpace"
 if launchctl print "gui/$(id -u)/sh.dotfiles.aerospace-bridge" >/dev/null 2>&1; then
   ok "event bridge agent loaded"
@@ -93,6 +95,9 @@ head_ "Built artefacts"
 [ -x "$REPO/config/aerospace/bin/picker" ] \
   && ok "picker built" \
   || no "picker not built - swiftc -O -o config/aerospace/bin/picker config/aerospace/src/picker.swift -framework AppKit"
+[ -x "$REPO/config/aerospace/bin/wallpaper" ] \
+  && ok "wallpaper helper built" \
+  || no "wallpaper helper not built - swiftc -O -o config/aerospace/bin/wallpaper config/aerospace/src/wallpaper.swift -framework AppKit"
 
 head_ "Capabilities"
 if "$REPO/bin/check-capabilities.sh" >/dev/null 2>&1; then
@@ -104,6 +109,35 @@ fi
 [ -L "$HOME/.local/bin/dot" ] && ok "dot on PATH" || no "$HOME/.local/bin/dot missing - run install.sh"
 theme="$(cat "$STATE/theme" 2>/dev/null)"
 [ -n "$theme" ] && ok "theme: $theme" || meh "no theme recorded - run dot theme set <name>"
+
+# The desktop picture and the screen saver are the two surfaces the bar can't
+# repaint itself, so they are the ones that quietly fall behind the theme.
+if [ -n "$theme" ] && [ -x "$REPO/config/aerospace/bin/wallpaper" ]; then
+  want="$STATE/wallpaper/$theme-$("$REPO/config/aerospace/bin/wallpaper" size).png"
+  if [ ! -f "$want" ]; then
+    meh "no wallpaper rendered for $theme - run dot theme wallpaper"
+  else
+    "$REPO/config/aerospace/bin/wallpaper" store \
+      | awk -F'\t' -v want="$want" '
+          { seen++; if ($4 != want) stale++ }
+          END { exit (seen > 0 && !stale) ? 0 : 1 }' \
+      && ok "desktop picture and screen saver match $theme" \
+      || meh "desktop picture or screen saver is off-theme - run dot theme wallpaper"
+  fi
+fi
+
+head_ "Shadows"
+# This setup separates surfaces with outlines. The bar's own shadow is off in
+# sketchybarrc; the one other shadow we can reach is the one macOS bakes into
+# window screenshots.
+[ "$(sketchybar --query bar 2>/dev/null | jq -r '.shadow')" = "off" ] \
+  && ok "the bar casts no shadow" \
+  || meh "the bar still has a shadow - sketchybar --reload"
+if [ "$(defaults read com.apple.screencapture disable-shadow 2>/dev/null)" = "1" ]; then
+  ok "window screenshots have no shadow"
+else
+  meh "window screenshots still carry a shadow - defaults write com.apple.screencapture disable-shadow -bool true && killall SystemUIServer"
+fi
 
 head_ "Recent errors"
 if [ -s "$STATE/log" ]; then

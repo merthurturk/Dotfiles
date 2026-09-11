@@ -1,0 +1,203 @@
+#!/usr/bin/env bash
+#
+# Matches the desktop picture and the screen saver to the current theme.
+#
+# The image is generated from themes/<name>/colors.sh -- the same file the bar
+# reads -- so there is no wallpaper to keep in sync by hand, and a new theme
+# gets one for free. Rendering happens per machine, at the display's pixel
+# size, into the state directory; nothing image-shaped lives in the repo.
+#
+# macOS 14 moved both halves into one store and gave the screen saver half no
+# public API, so the desktop is set through NSWorkspace and the screen saver is
+# pointed at the same image by editing the store. The whole store is copied
+# aside before the first edit -- that backup is the ledger, and --restore is
+# the undo.
+
+set -u
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+
+WALLPAPER="$DOT_ROOT/config/aerospace/bin/wallpaper"
+THEMES="$DOT_ROOT/themes"
+CACHE="$STATE_DIR/wallpaper"
+LEDGER="$CACHE/Index.plist.before-dot"
+
+current_theme() { cat "$STATE_DIR/theme" 2>/dev/null; }
+
+if [ "${1:-}" = "--describe" ]; then
+  jq -n \
+    --argjson choices "$(ls "$THEMES" | jq -R -s 'split("\n")|map(select(length>0))')" \
+    --arg detail "$(current_theme)" '{
+      id: "theme.wallpaper",
+      summary: "Match the desktop picture and screen saver to the theme",
+      args: [{name:"theme", required:false, choices:$choices},
+             {name:"--render-only", required:false},
+             {name:"--desktop-only", required:false}],
+      destructive: false,
+      guard: "Copies the wallpaper store aside before its first edit; dot theme wallpaper --restore puts it back",
+      verify: "dot theme wallpaper --show",
+      instances: [{label:"Wallpaper: match the theme", detail:$detail, args:[]}]
+    }'
+  exit 0
+fi
+
+[ -x "$WALLPAPER" ] || {
+  echo "dot: the wallpaper helper is not built." >&2
+  echo "     swiftc -O -o config/aerospace/bin/wallpaper \\" >&2
+  echo "            config/aerospace/src/wallpaper.swift -framework AppKit" >&2
+  exit 1
+}
+
+# --- read-only modes ------------------------------------------------------
+
+if [ "${1:-}" = "--show" ]; then
+  printf '%-46s %-8s %-38s %s\n' SCOPE HALF PROVIDER IMAGE
+  "$WALLPAPER" store | awk -F'\t' '{printf "%-46s %-8s %-38s %s\n", $1, $2, $3, $4}'
+  exit 0
+fi
+
+if [ "${1:-}" = "--restore" ]; then
+  [ -f "$LEDGER" ] || { echo "dot: nothing to restore -- no ledger at $LEDGER" >&2; exit 1; }
+  cp "$LEDGER" "$HOME/Library/Application Support/com.apple.wallpaper/Store/Index.plist"
+  killall WallpaperAgent 2>/dev/null
+  audit "theme wallpaper --restore"
+  echo "restored the wallpaper store from before dot first touched it."
+  exit 0
+fi
+
+# --- arguments ------------------------------------------------------------
+
+SCREENSAVER=1
+RENDER_ONLY=0
+THEME=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --desktop-only) SCREENSAVER=0 ;;
+    --render-only)  RENDER_ONLY=1 ;;
+    -*) echo "dot: unknown option: $1" >&2; exit 1 ;;
+    *)  THEME="$1" ;;
+  esac
+  shift
+done
+
+[ -n "$THEME" ] || THEME="$(current_theme)"
+[ -n "$THEME" ] || { echo "dot: no theme set -- run 'dot theme set <name>' first" >&2; exit 1; }
+COLORS="$THEMES/$THEME/colors.sh"
+[ -f "$COLORS" ] || { echo "dot: no theme '$THEME'" >&2; exit 1; }
+
+# --- palette --------------------------------------------------------------
+# Four glows, in hue order of preference. Themes alias their accents freely --
+# Rose Pine Dawn maps BLUE, GREEN and PINE to one colour -- so duplicates are
+# skipped rather than drawn twice, which would collapse two glows into one.
+
+# shellcheck source=/dev/null
+source "$COLORS"
+
+accents=""
+count=0
+for name in BLUE MAUVE PEACH TEAL PINK GREEN LAVENDER SAPPHIRE; do
+  eval "value=\${$name:-}"
+  [ -n "$value" ] || continue
+  case " $accents " in *" $value "*) continue ;; esac
+  accents="$accents $value"
+  count=$((count + 1))
+  [ "$count" -eq 4 ] && break
+done
+[ "$count" -gt 0 ] || { echo "dot: $THEME defines no accent colours" >&2; exit 1; }
+
+# --- render ---------------------------------------------------------------
+
+SIZE="$("$WALLPAPER" size)"
+mkdir -p "$CACHE"
+IMAGE="$CACHE/$THEME-$SIZE.png"
+
+# The render is deterministic, so it only has to happen when its inputs move:
+# the palette, or the renderer itself.
+if [ -f "$IMAGE" ] && [ "$IMAGE" -nt "$COLORS" ] && [ "$IMAGE" -nt "$WALLPAPER" ]; then
+  echo "wallpaper: $THEME, already rendered at $SIZE"
+else
+  # shellcheck disable=SC2086
+  "$WALLPAPER" render "$IMAGE" "$SIZE" "$BASE" "$CRUST" $accents >/dev/null || exit 1
+  echo "wallpaper: rendered $SIZE from $THEME's palette"
+fi
+
+if [ "$RENDER_ONLY" -eq 1 ]; then
+  echo "$IMAGE"
+  exit 0
+fi
+
+# --- apply ----------------------------------------------------------------
+
+# The ledger is written once, and only ever from the state that predates the
+# first edit -- overwriting it later would quietly destroy the way back.
+STORE="$HOME/Library/Application Support/com.apple.wallpaper/Store/Index.plist"
+if [ ! -f "$LEDGER" ] && [ -f "$STORE" ]; then
+  cp "$STORE" "$LEDGER"
+  echo "saved the previous wallpaper store to ${LEDGER/#$HOME/~}"
+fi
+
+# WallpaperAgent owns the store and writes it back asynchronously, some
+# fraction of a second after the API call returns. Reading it too early gets
+# the previous contents -- and writing to it too early loses the change, which
+# is exactly how the screen saver first ended up pointing at a stale image.
+store_holds() {  # store_holds <half> <path>
+  "$WALLPAPER" store | awk -F'\t' -v half="$1" -v want="$2" '
+    $2 == half { seen++; if ($3 != "com.apple.wallpaper.choice.image" || $4 != want) bad++ }
+    END { exit (seen > 0 && bad == 0) ? 0 : 1 }'
+}
+
+settle() {  # settle <half> <path> -- wait for the store to show it
+  local i=0
+  while [ "$i" -lt 40 ]; do
+    store_holds "$1" "$2" && return 0
+    sleep 0.25
+    i=$((i + 1))
+  done
+  return 1
+}
+
+"$WALLPAPER" set "$IMAGE" >/dev/null || exit 1
+settle_default() {  # the entry macOS itself writes, and the one we copy from
+  local i=0
+  while [ "$i" -lt 40 ]; do
+    # awk runs END even after exit, and its status wins -- so flag, don't exit.
+    "$WALLPAPER" store | awk -F'\t' -v want="$1" '
+      $1 == "SystemDefault" && $2 == "Desktop" {
+        ok = ($3 == "com.apple.wallpaper.choice.image" && $4 == want)
+      } END { exit ok ? 0 : 1 }' && return 0
+    sleep 0.25
+    i=$((i + 1))
+  done
+  return 1
+}
+
+settle_default "$IMAGE" || {
+  echo "dot: the desktop picture did not reach the wallpaper store." >&2
+  echo "     dot theme wallpaper --show     to see what it holds" >&2
+  exit 1
+}
+
+[ "$SCREENSAVER" -eq 1 ] && scope=both || scope=desktop
+"$WALLPAPER" propagate "$scope" >/dev/null || exit 1
+# The agent holds the store in memory and rewrites it on quit, so it has to be
+# restarted to read the edit rather than overwrite it.
+killall WallpaperAgent 2>/dev/null
+
+settle Desktop "$IMAGE" || {
+  echo "dot: the desktop picture did not survive the agent restart." >&2
+  echo "     dot theme wallpaper --show     to see what it holds" >&2
+  exit 1
+}
+if [ "$SCREENSAVER" -eq 1 ]; then
+  settle Idle "$IMAGE" || {
+    echo "dot: the screen saver did not keep the image." >&2
+    echo "     dot theme wallpaper --show     to see what it holds" >&2
+    echo "     dot theme wallpaper --restore  to put it back" >&2
+    exit 1
+  }
+fi
+
+audit "theme wallpaper $THEME$([ "$SCREENSAVER" -eq 1 ] && echo " +screensaver")"
+
+echo "desktop: ${IMAGE/#$HOME/~}"
+[ "$SCREENSAVER" -eq 1 ] && echo "screen saver: the same image"
+exit 0

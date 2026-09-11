@@ -68,6 +68,20 @@ at all.
 kb="$(keysym "$(keybinding 'dot scene open')")"   # -> ⌥⇧space, or empty
 ```
 
+## `DOT_ORIG_WS` / `DOT_ORIG_WID`
+
+The menu captures the focused workspace and window **before** it shows the
+picker, and exports them. A capability that wants to act "beside what I was
+looking at" must prefer those over asking:
+
+```bash
+ORIG_WS="${DOT_ORIG_WS:-$($AEROSPACE list-workspaces --focused)}"
+```
+
+Asking afterwards is a race: the picker panel taking and releasing focus means
+the answer is sometimes a different workspace entirely. `dot ai` opened its
+session on the wrong workspace because of exactly this.
+
 ## Verify, don't trust exit codes
 
 AeroSpace will accept `layout tiling`, return 0, and move nothing. It reports

@@ -69,3 +69,8 @@ export BADGE_BLUE_DEEP=0xff286983
 export BADGE_GREEN_TINT=0xffe9f0f2
 export BADGE_GREEN_EDGE=0xffd6dcde
 export BADGE_GREEN_DEEP=0xff286983
+
+# Window outlines (JankyBorders). See the note in opal-white/colors.sh:
+# focused windows take the same accent as the focused workspace pill.
+export WINDOW_BORDER_ACTIVE=$BLUE
+export WINDOW_BORDER_INACTIVE=$SURFACE1

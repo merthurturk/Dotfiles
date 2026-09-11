@@ -1,6 +1,7 @@
 {
-  "name": "Catppuccin Latte",
+  "name": "Opal White",
   "appearance": "light",
+  "derived_from": "Catppuccin Latte",
   "ghostty_theme": "Catppuccin Latte",
   "cursor": "#1e66f5"
 }

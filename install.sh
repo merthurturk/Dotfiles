@@ -57,26 +57,37 @@ case ":$PATH:" in
   *) warn "$HOME/.local/bin is not on your PATH; add it so dot works from a shell." ;;
 esac
 
+# --- Compiled helpers -----------------------------------------------------
+
+if command -v swiftc >/dev/null 2>&1; then
+  mkdir -p "$DOTFILES/config/aerospace/bin"
+  for helper in picker wallpaper; do
+    log "Building $helper"
+    swiftc -O -o "$DOTFILES/config/aerospace/bin/$helper" \
+                "$DOTFILES/config/aerospace/src/$helper.swift" -framework AppKit
+  done
+else
+  warn "swiftc missing - run 'xcode-select --install' then re-run this script."
+  warn "Until then the Chrome profile prompt falls back to a plain AppleScript list,"
+  warn "and the desktop picture can't be generated from the theme."
+fi
+
 # --- Theme ----------------------------------------------------------------
 # colors.sh and the Ghostty theme are symlinks into themes/<name>/, so a fresh
 # clone has to pick one before the bar can start.
 
 if [ ! -e "$HOME/.local/state/aerospace/theme" ]; then
   log "Selecting the default theme"
-  DOT_ROOT="$DOTFILES" "$DOTFILES/libexec/dot/theme-set" catppuccin-latte >/dev/null
+  DOT_ROOT="$DOTFILES" "$DOTFILES/libexec/dot/theme-set" opal-white >/dev/null
 fi
 
-# --- Compiled helpers -----------------------------------------------------
+# --- System defaults ------------------------------------------------------
+# This setup separates surfaces with outlines rather than shadows, and a window
+# screenshot otherwise carries a drop shadow the size of the window.
 
-if command -v swiftc >/dev/null 2>&1; then
-  log "Building picker"
-  mkdir -p "$DOTFILES/config/aerospace/bin"
-  swiftc -O -o "$DOTFILES/config/aerospace/bin/picker" \
-              "$DOTFILES/config/aerospace/src/picker.swift" -framework AppKit
-else
-  warn "swiftc missing - run 'xcode-select --install' then re-run this script."
-  warn "Until then the Chrome profile prompt falls back to a plain AppleScript list."
-fi
+log "Turning off the screenshot drop shadow"
+defaults write com.apple.screencapture disable-shadow -bool true
+killall SystemUIServer 2>/dev/null || true
 
 # --- Event bridge ---------------------------------------------------------
 # Translates AeroSpace's event stream into SketchyBar triggers. Without it the
@@ -102,6 +113,11 @@ fi
 
 log "Starting sketchybar"
 brew services restart sketchybar >/dev/null
+
+# Window outlines. Configured by config/borders/bordersrc, which is already
+# linked into ~/.config above.
+log "Starting borders"
+brew services restart borders >/dev/null
 
 log "Starting AeroSpace"
 open -a AeroSpace 2>/dev/null || warn "Could not open AeroSpace - launch it once by hand."

@@ -41,6 +41,25 @@ audit "theme set $THEME"
 
 sketchybar --reload 2>/dev/null
 
+# Window outlines read the same colors.sh through the bar's symlink, and a
+# second invocation retints the running instance rather than starting another.
+BORDERS="$HOME/.config/borders/bordersrc"
+if command -v borders >/dev/null 2>&1 && [ -x "$BORDERS" ]; then
+  "$BORDERS" >/dev/null 2>&1
+  outlines="  window outlines retinted."
+else
+  outlines=""
+fi
+
 echo "theme: $THEME"
 echo "  bar reloaded."
+[ -n "$outlines" ] && echo "$outlines"
 echo "  Ghostty picks it up on its next config reload (⌘⇧, in a terminal)."
+
+# The desktop picture is generated from this theme's colors.sh too, so it has
+# to be regenerated here -- otherwise the one surface nobody looks at directly
+# is the one left on the old palette.
+"$DOT_ROOT/libexec/dot/theme-wallpaper" "$THEME" 2>&1 | sed 's/^/  /'
+# The pipe's status is sed's; the capability's own is what matters here.
+[ "${PIPESTATUS[0]}" -eq 0 ] \
+  || echo "  desktop picture unchanged -- run 'dot theme wallpaper' to see why."

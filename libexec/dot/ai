@@ -61,7 +61,14 @@ if [ "$PLAN_MODE" -eq 0 ]; then
   [ -x "$GHOSTTY" ] || { echo "dot ai: Ghostty not found at $GHOSTTY" >&2; exit 1; }
   audit "ai session: $REQUEST"
 
-  ORIG_WID="$($AEROSPACE list-windows --focused --format '%{window-id}')"
+  # Capture both *before* opening. Launching Ghostty activates it, which moves
+  # focus, and AeroSpace does not necessarily place the new window on the
+  # workspace you were on -- observed landing on a third workspace entirely.
+  # Asking "which workspace is focused" after the fact gets the wrong answer.
+  # The menu exports these from before the picker took focus; fall back to
+  # asking when invoked directly from a shell.
+  ORIG_WID="${DOT_ORIG_WID:-$($AEROSPACE list-windows --focused --format '%{window-id}')}"
+  ORIG_WS="${DOT_ORIG_WS:-$($AEROSPACE list-workspaces --focused)}"
   BEFORE="$($AEROSPACE list-windows --all --format '%{window-id}' | sort)"
 
   # printf %q so a request with quotes or spaces survives the shell.
@@ -79,14 +86,16 @@ if [ "$PLAN_MODE" -eq 0 ]; then
   [ -n "$NEW" ] || { echo "dot ai: session window never appeared" >&2; exit 1; }
 
   # Sit it beside whatever you were looking at, so you can watch it work.
+  $AEROSPACE move-node-to-workspace --window-id "$NEW" "$ORIG_WS" 2>/dev/null
+  $AEROSPACE layout tiling --window-id "$NEW" >/dev/null 2>&1 || true
+  $AEROSPACE layout tiles  --window-id "$NEW" >/dev/null 2>&1 || true
+  $AEROSPACE workspace "$ORIG_WS" 2>/dev/null
+  sleep 0.4
+
   if [ -n "$ORIG_WID" ] && [ "$ORIG_WID" != "$NEW" ]; then
-    $AEROSPACE move-node-to-workspace --window-id "$NEW" \
-      "$($AEROSPACE list-workspaces --focused)" 2>/dev/null
-    $AEROSPACE layout tiling --window-id "$NEW" >/dev/null 2>&1 || true
-    $AEROSPACE layout tiles  --window-id "$NEW" >/dev/null 2>&1 || true
-    sleep 0.5
     split_resize "$ORIG_WID" 0.6 || true
   fi
+  $AEROSPACE focus --window-id "$NEW" 2>/dev/null || true
   exit 0
 fi
 

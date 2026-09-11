@@ -42,8 +42,17 @@ ITEM_PADDING=4
 BAR_PADDING=$(( PILL_INSET - ITEM_PADDING ))
 
 ##### Bar #####
-# Opaque: a light bar over light window content needs the border and shadow to
-# read as a separate surface, and blur was causing recomposition flicker.
+# Whether the bar is a surface at all is theme data -- BAR_COLOR and
+# BAR_BORDER_COLOR. The current theme sets both transparent, so the geometry
+# below still reserves the space but nothing is drawn: the chips float over the
+# wallpaper on their own. A theme that wants a bar-shaped surface back just
+# gives those two a colour.
+#
+# The width stays at 1 either way. A transparent border still reserves its
+# pixel, so switching between the two doesn't move anything.
+#
+# Whatever it draws, it draws no shadow -- this setup outlines (see
+# config/borders/bordersrc), and blur was causing recomposition flicker.
 
 sketchybar --bar height=$BAR_HEIGHT \
                  position=top \
@@ -56,7 +65,7 @@ sketchybar --bar height=$BAR_HEIGHT \
                  color="$BAR_COLOR" \
                  border_width=1 \
                  border_color="$BAR_BORDER_COLOR" \
-                 shadow=on
+                 shadow=off
 
 ##### Defaults #####
 

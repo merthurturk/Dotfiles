@@ -1,1 +1,1 @@
-/Users/merthurturk/.dotfiles/themes/catppuccin-latte/colors.sh
+/Users/merthurturk/.dotfiles/themes/opal-white/colors.sh

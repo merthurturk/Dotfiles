@@ -12,7 +12,7 @@ the four moving parts fit together and is the index for everything else.
 | [capabilities](docs/capabilities.md) | the `dot` surface, descriptors, adding one |
 | [bar](docs/bar.md) | SketchyBar items, plugins, geometry, fonts, colour |
 | [scenes](docs/scenes.md) | `scenes.json`, window specs, the close ledger |
-| [themes](docs/themes.md) | theme structure, why accents get darkened |
+| [themes](docs/themes.md) | theme structure, the generated wallpaper, outlines, why accents get darkened |
 | [picker](docs/picker.md) | the Swift chooser, modes, frecency |
 | [macos](docs/macos.md) | platform constraints — TCC, bash 3.2, AeroSpace quirks |
 | [troubleshooting](docs/troubleshooting.md) | symptom → cause |
@@ -70,6 +70,18 @@ because a TOML table captures every key after it.
 
 Scenes are `scenes.json`. Themes are `themes/<name>/`. Adding either should not
 mean editing a script.
+
+### Outlines, not shadows
+
+Surfaces are separated by drawing their edge — the bar, the chips, the windows
+(JankyBorders) and screenshots. `shadow=on` is not a thing this setup does.
+`WINDOW_BORDER_ACTIVE` and `WINDOW_BORDER_INACTIVE` are theme data like
+everything else; a future theme is free to disagree, but it has to say so in
+its own `colors.sh`.
+
+macOS's own window shadow is the exception: it cannot be written from an
+unprivileged process. Don't try again — three SkyLight routes are measured in
+[macos](docs/macos.md), and all three return success while changing nothing.
 
 ### Stderr is discarded
 

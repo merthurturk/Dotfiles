@@ -17,6 +17,14 @@ fi
 PICKER="$DOT_ROOT/config/aerospace/bin/picker"
 MENU="$(mktemp)"; trap 'rm -f "$MENU"' EXIT
 
+# Capture where the user is *before* the picker takes focus. The panel closing
+# and focus returning is a race, so a command that wants to act "beside what I
+# was looking at" cannot ask after the fact -- it would sometimes get the wrong
+# workspace, or a workspace that had moved on.
+DOT_ORIG_WS="$("$AEROSPACE" list-workspaces --focused 2>/dev/null)"
+DOT_ORIG_WID="$("$AEROSPACE" list-windows --focused --format '%{window-id}' 2>/dev/null)"
+export DOT_ORIG_WS DOT_ORIG_WID
+
 # A capability appears in the menu exactly when it declares instances. Query
 # commands (dot scene list, dot window list) deliberately declare none -- they
 # are CLI and agent surface, and printing JSON into a picker is useless.
