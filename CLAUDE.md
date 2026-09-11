@@ -1,127 +1,92 @@
 # Working in this repo
 
-macOS tiling setup: AeroSpace + SketchyBar, Catppuccin Latte, Ghostty.
-`readme.md` is the user-facing documentation; this file is the working contract.
+A macOS tiling setup: AeroSpace + SketchyBar + Ghostty, all driven by one
+command, `dot`. `readme.md` is user-facing; this file is the working contract.
+
+**Read [`docs/architecture.md`](docs/architecture.md) first.** It explains how
+the four moving parts fit together and is the index for everything else.
+
+| Doc | For |
+|---|---|
+| [architecture](docs/architecture.md) | how it fits together, state files, symlinks |
+| [capabilities](docs/capabilities.md) | the `dot` surface, descriptors, adding one |
+| [bar](docs/bar.md) | SketchyBar items, plugins, geometry, fonts, colour |
+| [scenes](docs/scenes.md) | `scenes.json`, window specs, the close ledger |
+| [themes](docs/themes.md) | theme structure, why accents get darkened |
+| [picker](docs/picker.md) | the Swift chooser, modes, frecency |
+| [macos](docs/macos.md) | platform constraints — TCC, bash 3.2, AeroSpace quirks |
+| [troubleshooting](docs/troubleshooting.md) | symptom → cause |
 
 ---
 
-## `dot` is the entry point
+## Rules
 
-`bin/dot` is the single, supported surface for everything this setup does.
-**Do not edit config files to make a change `dot` can make**, and do not add a
-keybinding or bar button that has no `dot` command behind it.
+### `dot` is the entry point
 
-### Every capability describes itself
+Everything goes through `bin/dot`. Don't edit a config to do something `dot`
+can do, and don't add a keybinding or bar button with no `dot` command behind
+it.
 
-A capability is a script in `libexec/dot/<group>-<verb>` that answers
-`--describe` with a JSON descriptor. That descriptor is the *only* registration:
+### One capability, one file, one registration
 
-- the ⌥space palette renders from it
-- `dot help` lists from it
-- `dot capabilities --json` is what an agent reads
-- `bin/check-capabilities.sh` validates it
+A capability is `libexec/dot/<group>-<verb>` answering `--describe` with JSON.
+That descriptor is the *only* registration — the palette, `dot help`,
+`dot capabilities --json` and the validator all read it.
 
-This replaced a hand-maintained launcher list plus a checker that policed drift
-between it and reality. Don't reintroduce a second place to register things.
+There was once a hand-written palette plus a checker whose job was catching
+drift between it and reality. Both are gone. **Do not reintroduce a second place
+to register things.**
 
-### Required fields
+Required: `id`, `summary`, `destructive`. Plus `guard` whenever destructive
+(the validator fails without it), `verify` for anything that mutates, and
+`instances` to appear in the palette. Details in
+[capabilities](docs/capabilities.md).
 
-`id`, `summary`, `destructive`. Plus:
+### Verify against the world, not the exit code
 
-- **`instances`** — put the capability in the palette, one row each (a scene
-  each, a workspace each). Omit for query-only commands; printing JSON into a
-  picker helps nobody.
-- **`guard`** — mandatory when `destructive: true`. The check fails without it.
-  State what stops it firing at the wrong target.
-- **`verify`** — a command that proves the change landed. Provide one for
-  anything that mutates state.
-- **`keybinding`** — never hardcode it. Read it from `aerospace.toml` with
-  `keybinding()` in `_lib.sh`, so a hint can't drift from the binding.
+AeroSpace returns 0 and does nothing, routinely. A font string that doesn't
+resolve falls back silently and looks correct. Measure, query, re-read — don't
+assert. Several bugs here survived precisely because something reported success.
 
-### Verify, never trust exit codes
+### Destructive actions need a ledger, not a prompt
 
-AeroSpace will accept `layout tiling` and report success while moving nothing —
-this cost hours in one session. Anything that mutates state must be checked
-against the world, which is what `verify` is for.
+`scene.sh` records what it opened and refuses to close anything else. A
+confirmation dialog is too easy to click through, and focus drifts on its own,
+so "act on the focused thing" will eventually act on the wrong thing. It already
+did once.
 
-### Adding a capability
+### Never hardcode a keybinding
 
-One file. No second registration. Then `bin/check-capabilities.sh`.
+Read it from `aerospace.toml` with `keybinding()` in `_lib.sh`. A hand-written
+hint drifts from the binding it describes.
+
+### No absolute paths
+
+No `/Users/<name>`, no `/opt/homebrew`. Use `$HOME`, and the `[exec]` `PATH`
+table in `aerospace.toml` — which must stay the **last** table in the file,
+because a TOML table captures every key after it.
+
+### Data over code
+
+Scenes are `scenes.json`. Themes are `themes/<name>/`. Adding either should not
+mean editing a script.
+
+### Stderr is discarded
+
+By both `exec-and-forget` and `click_script`. Anything user-facing sources
+`config/aerospace/logging.sh`.
+
+---
 
 ## Before you finish
 
 ```sh
-dot doctor                   # verifies the live system, including GUI-only steps
-bin/check-capabilities.sh    # every capability describes itself correctly
-githooks/pre-commit          # syntax + shellcheck + capability validation
+dot doctor                   # the live system, including GUI-only steps
+bin/check-capabilities.sh    # every descriptor is valid
+githooks/pre-commit          # syntax + shellcheck + the above
 ```
 
-The hook runs automatically on commit. Don't `--no-verify` past it without
-saying why.
+The hook runs on commit. Don't `--no-verify` past it without saying why.
 
-## Conventions
-
-**No absolute paths.** No `/Users/<name>`, no `/opt/homebrew`. Use `$HOME`, and
-the `[exec]` `PATH` table in `aerospace.toml` (which must stay the **last** table
-in the file — a TOML table captures every key after it).
-
-**macOS ships bash 3.2.** No associative arrays: `declare -A` fails and string
-subscripts silently collapse to index `0`. Group with `awk` instead. Test with
-`/bin/bash`, not a Homebrew bash.
-
-**Only sketchybar has Full Disk Access.** It is the sole process that can read
-the Focus database, so it *publishes* state to `~/.local/state/aerospace/focus`
-for everything else. Anything running under AeroSpace must read that file, not
-the database.
-
-**Don't trust focus to stay put.** `open -a` activates an app and moves focus;
-an empty workspace has no window to hold it. Target windows and workspaces by
-id, not by "whatever is focused". This has caused two real bugs.
-
-**Destructive actions need a ledger, not a prompt.** `scene.sh` records what it
-opens and refuses to close anything else. A confirmation dialog is too easy to
-fire at the wrong target.
-
-**Themes are data.** A theme is `themes/<name>/` with `colors.sh`,
-`ghostty.conf` and `meta.json`. `dot theme set` repoints the symlinks. Accents
-must be darkened until white text on them clears 4.5:1 — measure, don't eyeball;
-both upstream palettes shipped accents that fail badly on a light background.
-
-**Scenes are data.** They live in `config/aerospace/scenes.json`, not in a
-`case` statement. `scene.sh --list` and `--describe` feed the launcher, so a new
-scene appears in the palette on its own.
-
-**Don't hand-wire triggers into `aerospace.toml`.** The event bridge
-(`config/aerospace/event-bridge.sh`, a launchd agent) subscribes to AeroSpace's
-event stream and drives the bar. The only events that exist are
-`focus-changed`, `focused-monitor-changed`, `focused-workspace-changed`,
-`mode-changed`, `window-detected` and `binding-triggered` — there is **no**
-window-closed or window-moved event, which is why `spaces_watcher` also polls.
-
-**Stderr is discarded** by both `exec-and-forget` and `click_script`. Anything
-user-facing should source `config/aerospace/logging.sh`.
-
-**Verify against the running system.** `sketchybar --query <item>`,
-`aerospace list-windows`, `--dry-run`. Font and geometry claims in particular
-should be measured, not asserted — a font string that doesn't resolve silently
-falls back and looks like it worked.
-
----
-
-## Layout
-
-| Path | Purpose |
-|---|---|
-| `aerospace.toml` | → `~/.aerospace.toml` |
-| `config/<name>/` | → `~/.config/<name>/` (auto-linked by `install.sh`) |
-| `bin/dot` | the dispatcher — **the entry point** |
-| `libexec/dot/<group>-<verb>` | one capability each, self-describing |
-| `themes/<name>/` | `colors.sh` + `ghostty.conf` + `meta.json` |
-| `config/aerospace/scene.sh` | named window layouts; `--list` feeds the palette |
-| `config/aerospace/split-lib.sh` | shared window sizing |
-| `config/aerospace/src/picker.swift` | the chooser, compiled to `bin/picker` (gitignored) |
-| `bin/check-capabilities.sh` | validates every descriptor |
-
-After editing: `aerospace reload-config`, `sketchybar --reload`, and rebuild the
-picker with `swiftc -O -o config/aerospace/bin/picker
-config/aerospace/src/picker.swift -framework AppKit`.
+Keep the docs true: if you change how something works, the doc describing it is
+part of the change.

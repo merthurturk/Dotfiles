@@ -17,6 +17,17 @@ compiles the Swift picker, starts the services, and prints the GUI-only steps
 that remain. It is re-runnable: anything it would overwrite is moved to
 `~/.dotfiles-backup/<timestamp>/` first.
 
+## Documentation
+
+| Doc | For |
+|---|---|
+| [architecture](docs/architecture.md) | how the parts fit together |
+| [capabilities](docs/capabilities.md) | the `dot` surface |
+| [bar](docs/bar.md) | SketchyBar items, geometry, fonts |
+| [scenes](docs/scenes.md) · [themes](docs/themes.md) · [picker](docs/picker.md) | the pieces |
+| [macos](docs/macos.md) | platform constraints worth knowing |
+| [troubleshooting](docs/troubleshooting.md) | when something misbehaves |
+
 ## Layout
 
 | Path | Links to |

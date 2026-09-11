@@ -6,6 +6,11 @@ description: Control this macOS setup (AeroSpace tiling, SketchyBar, scenes, the
 # dot
 
 `dot` is the single entry point for everything this machine's setup can do.
+
+Full reference lives in `docs/` — start with `docs/architecture.md`, which
+indexes the rest (`capabilities`, `bar`, `scenes`, `themes`, `picker`, `macos`,
+`troubleshooting`). `docs/macos.md` in particular records platform constraints
+that are easy to waste time rediscovering.
 **Never edit config files directly to make a change that `dot` can make** — the
 command is the supported surface, it audits what it does, and it declares what
 is destructive.
