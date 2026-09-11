@@ -46,6 +46,7 @@ Right: now-playing, volume/battery/clock cluster, Focus chip.
 |---|---|
 | `⌥⇧↩` | New Chrome window beside the focused one at 3/5–2/5, asking which profile |
 | `⌥⇧\` | `balance-sizes` — reset the workspace to even splits |
+| `⌥⇧space` | Open the `chill` scene on an empty workspace (also the ☕ button, far left of the bar) |
 
 `config/aerospace/split-with.sh "<App>" <ratio>` does the same for any app but
 summons an existing window instead of opening a new one. Bind more with:
@@ -74,6 +75,25 @@ Two traps worth remembering:
   be chosen by family name: `Berkeley Mono Bold SemiCondensed:Regular`.
 - For the same reason Ghostty needs `font-family-bold` / `font-family-italic`
   named explicitly, or it synthesises them.
+
+## Scenes
+
+`config/aerospace/scene.sh <scene>` opens a named window layout on the first
+**empty** workspace: a wide Chrome window with several tabs, plus a narrower one
+beside it. The side window uses Chrome's `--app` flag, which drops the tab strip
+and toolbar — what you want for a chat panel living in ~500pt.
+
+`chill` opens YouTube / X / Instagram at 70%, with the Context Engine chat at 30%.
+
+Add a scene by adding a `case` branch with its `MAIN_URLS`, `SIDE_URL` and
+`RATIO`, then bind it:
+
+```toml
+alt-shift-period = 'exec-and-forget $HOME/.config/aerospace/scene.sh work'
+```
+
+A second argument picks the Chrome profile by display name, defaulting to
+`Default`.
 
 ## The picker
 

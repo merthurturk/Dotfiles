@@ -95,6 +95,21 @@ default=(
 )
 sketchybar --default "${default[@]}"
 
+##### Scene launcher #####
+# Leftmost so it reads as a launcher. Opens a named window layout on an empty
+# workspace -- see ~/.config/aerospace/scene.sh
+
+sketchybar --add item scene left \
+           --set scene icon="󰅶" \
+                 icon.font="$ICON_FONT:Bold:16.0" \
+                 icon.color="$PEACH" \
+                 icon.padding_left=10 \
+                 icon.padding_right=10 \
+                 label.drawing=off \
+                 background.color="$GROUP_BG" \
+                 background.border_color="$GROUP_BORDER" \
+                 click_script="$HOME/.config/aerospace/scene.sh chill"
+
 ##### AeroSpace workspaces #####
 
 sketchybar --add event aerospace_workspace_change
