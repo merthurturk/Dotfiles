@@ -96,8 +96,8 @@ default=(
 sketchybar --default "${default[@]}"
 
 ##### Scene launcher #####
-# Leftmost so it reads as a launcher. Opens a named window layout on an empty
-# workspace -- see ~/.config/aerospace/scene.sh
+# Leftmost so it reads as a launcher. Left click opens a named window layout on
+# an empty workspace; right click closes it. See ~/.config/aerospace/scene.sh
 
 sketchybar --add item scene left \
            --set scene icon="󰅶" \
@@ -108,7 +108,7 @@ sketchybar --add item scene left \
                  label.drawing=off \
                  background.color="$GROUP_BG" \
                  background.border_color="$GROUP_BORDER" \
-                 click_script="$HOME/.config/aerospace/scene.sh chill"
+                 click_script="$PLUGIN_DIR/scene_click.sh"
 
 ##### AeroSpace workspaces #####
 

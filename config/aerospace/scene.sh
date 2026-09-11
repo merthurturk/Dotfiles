@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
-# scene.sh [scene] [chrome-profile-name]
+# scene.sh <scene> [chrome-profile-name]   open a named layout
+# scene.sh close [workspace]               close everything on a scene workspace
 #
 # Opens a named window layout on a fresh, empty workspace: a wide "main" Chrome
 # window holding several tabs, and a narrow "side" window beside it.
@@ -16,9 +17,77 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$DIR/split-lib.sh"
 
+LOCAL_STATE="$HOME/Library/Application Support/Google/Chrome/Local State"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/aerospace"
+STATE_FILE="$STATE_DIR/scenes"   # "<workspace>\t<scene name>" per line
+
+# --- scene bookkeeping ----------------------------------------------------
+# Remembering which workspaces this script opened is what makes closing safe:
+# a scene workspace can be emptied without a prompt, anything else can't.
+
+remember_scene() {   # <workspace> <scene>
+  mkdir -p "$STATE_DIR"
+  local tmp="$STATE_FILE.tmp"
+  [ -f "$STATE_FILE" ] && grep -v "^$1	" "$STATE_FILE" > "$tmp" 2>/dev/null
+  printf '%s\t%s\n' "$1" "$2" >> "$tmp"
+  mv "$tmp" "$STATE_FILE"
+}
+
+forget_scene() {     # <workspace>
+  [ -f "$STATE_FILE" ] || return 0
+  local tmp="$STATE_FILE.tmp"
+  grep -v "^$1	" "$STATE_FILE" > "$tmp" 2>/dev/null || true
+  mv "$tmp" "$STATE_FILE"
+}
+
+scene_of() {         # <workspace> -> scene name, or empty
+  [ -f "$STATE_FILE" ] || return 0
+  awk -F'\t' -v w="$1" '$1 == w { print $2; exit }' "$STATE_FILE"
+}
+
+# --- close ----------------------------------------------------------------
+
+if [ "${1:-}" = "close" ]; then
+  shift
+  FORCE=0
+  if [ "${1:-}" = "--force" ]; then FORCE=1; shift; fi
+  WS="${1:-$($AEROSPACE list-workspaces --focused)}"
+
+  NAME="$(scene_of "$WS")"
+  if [ -z "$NAME" ] && [ "$FORCE" -eq 0 ]; then
+    # Refuse rather than prompt. Defaulting to the focused workspace plus a
+    # dismissible dialog is too easy to fire at the wrong target -- focus
+    # drifts on its own as apps activate.
+    echo "scene: workspace $WS was not opened as a scene; refusing to close it." >&2
+    if [ -s "$STATE_FILE" ]; then
+      echo "scene: open scenes are:" >&2
+      sed 's/^/  workspace /;s/\t/  -> /' "$STATE_FILE" >&2
+      echo "scene: close one with  scene.sh close <workspace>" >&2
+    else
+      echo "scene: no scenes are currently open." >&2
+    fi
+    echo "scene: use  scene.sh close --force $WS  to close it anyway." >&2
+    exit 1
+  fi
+
+  WIDS="$($AEROSPACE list-windows --workspace "$WS" --format '%{window-id}')"
+  if [ -z "$WIDS" ]; then
+    forget_scene "$WS"
+    echo "scene: workspace $WS is already empty" >&2
+    exit 0
+  fi
+
+  printf '%s\n' "$WIDS" | while read -r wid; do
+    [ -n "$wid" ] && $AEROSPACE close --window-id "$wid" 2>/dev/null
+  done
+  forget_scene "$WS"
+  exit 0
+fi
+
+# --- open -----------------------------------------------------------------
+
 SCENE="${1:-chill}"
 PROFILE_NAME="${2:-}"
-LOCAL_STATE="$HOME/Library/Application Support/Google/Chrome/Local State"
 
 case "$SCENE" in
   chill)
@@ -53,10 +122,8 @@ fi
 # back to the previously focused window and the new windows are born on *that*
 # workspace instead. So let them open wherever they land and move them by id.
 
-# Waits for a window to appear anywhere that wasn't in $1.
-wait_new_window() {
-  local before="$1" new=""
-  local i
+wait_new_window() {   # <sorted list of window ids that existed before>
+  local before="$1" new="" i
   for i in $(seq 1 60); do
     sleep 0.25
     new="$(comm -13 <(printf '%s\n' "$before") \
@@ -95,3 +162,4 @@ sleep 0.4
 
 split_resize "$MAIN_WID" "$RATIO"
 $AEROSPACE focus --window-id "$MAIN_WID" 2>/dev/null || true
+remember_scene "$WS" "$SCENE"

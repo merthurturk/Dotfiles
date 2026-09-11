@@ -46,7 +46,8 @@ Right: now-playing, volume/battery/clock cluster, Focus chip.
 |---|---|
 | `⌥⇧↩` | New Chrome window beside the focused one at 3/5–2/5, asking which profile |
 | `⌥⇧\` | `balance-sizes` — reset the workspace to even splits |
-| `⌥⇧space` | Open the `chill` scene on an empty workspace (also the ☕ button, far left of the bar) |
+| `⌥⇧space` | Open the `chill` scene on an empty workspace (also left-click the ☕ button) |
+| `⌥⇧⌫` | Close the scene on the focused workspace (also right-click ☕) |
 
 `config/aerospace/split-with.sh "<App>" <ratio>` does the same for any app but
 summons an existing window instead of opening a new one. Bind more with:
@@ -94,6 +95,20 @@ alt-shift-period = 'exec-and-forget $HOME/.config/aerospace/scene.sh work'
 
 A second argument picks the Chrome profile by display name, defaulting to
 `Default`.
+
+Closing:
+
+```sh
+scene.sh close            # the focused workspace
+scene.sh close 5          # a specific one
+scene.sh close --force 5  # one it didn't open
+```
+
+`scene.sh` records the workspaces it opens in
+`~/.local/state/aerospace/scenes` and **refuses to close anything else**,
+listing the open scenes instead. That guard matters: focus drifts on its own as
+apps activate, so a plain "close the focused workspace" will eventually fire at
+the wrong one.
 
 ## The picker
 
