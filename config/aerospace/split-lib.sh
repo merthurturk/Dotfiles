@@ -72,5 +72,13 @@ split_resize() {
   target="$(awk -v w="$tile_w" -v r="$ratio" -v g="$inner_h" \
                 'BEGIN { printf "%d", w * r + 0.5 + g / 2 }')"
 
-  $AEROSPACE resize --window-id "$wid" width "$target"
+  # `resize` refuses floating windows (AeroSpace issue #9), and an app can open
+  # one floating without warning -- which failed silently until stderr started
+  # being logged. Tiling first is a no-op when it's already tiled.
+  $AEROSPACE layout --window-id "$wid" tiling >/dev/null 2>&1 || true
+
+  if ! $AEROSPACE resize --window-id "$wid" width "$target" 2>/dev/null; then
+    echo "split: couldn't resize window $wid -- it may be alone on its workspace" >&2
+    return 1
+  fi
 }

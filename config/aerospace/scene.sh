@@ -246,8 +246,11 @@ for spec in "${WINDOWS[@]}"; do
 done
 
 # Move in order so the first spec ends up leftmost, then reveal the workspace.
+# Force tiling: an app may open its window floating, which would sit on top of
+# the layout instead of in it, and can't be resized.
 for wid in "${WIDS[@]}"; do
   $AEROSPACE move-node-to-workspace --window-id "$wid" "$WS"
+  $AEROSPACE layout --window-id "$wid" tiling >/dev/null 2>&1 || true
 done
 $AEROSPACE workspace "$WS"
 sleep 0.4

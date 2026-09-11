@@ -72,14 +72,22 @@ fi
   || meh "menu bar doesn't auto-hide - the bar draws in that space (Control Centre settings)"
 
 head_ "Shortcuts (the Focus toggle)"
-for s in "Focus On" "Focus Off"; do
-  if shortcuts list 2>/dev/null | grep -Fxq "$s"; then
-    ok "\"$s\""
-  else
-    no "\"$s\" missing - clicking the Focus chip can't toggle without it"
-    printf '      Shortcuts.app > new shortcut named exactly "%s" > one Set Focus action\n' "$s"
-  fi
-done
+# Mirror focus_click.sh: directional shortcuts are preferred because they let
+# the bar pick the direction from the state it already reads, but a single
+# "Toggle Focus" is a perfectly good fallback and the handler uses it.
+have() { shortcuts list 2>/dev/null | grep -Fxq "$1"; }
+if have "Focus On" && have "Focus Off"; then
+  ok "\"Focus On\" + \"Focus Off\" (direction chosen from live state)"
+elif have "Toggle Focus"; then
+  ok "\"Toggle Focus\" (fallback; works)"
+  printf '      Optional: separate "Focus On"/"Focus Off" shortcuts let the bar\n'
+  printf '      pick the direction rather than relying on the toggle.\n'
+elif have "Focus On" || have "Focus Off"; then
+  meh "only one of \"Focus On\"/\"Focus Off\" exists - the other direction won't work"
+else
+  no "no Focus shortcut - clicking the Focus chip can't toggle"
+  printf '      Shortcuts.app > a shortcut named "Toggle Focus" with one Set Focus action\n'
+fi
 
 head_ "Built artefacts"
 [ -x "$REPO/config/aerospace/bin/picker" ] \
