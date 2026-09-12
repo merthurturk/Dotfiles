@@ -77,6 +77,7 @@ clickable items — the ring is the whole affordance available.
 | `⌥space` | **Command palette** — every action, searchable, with its keybinding shown |
 | `⌥⇧↩` | New Chrome window beside the focused one at 3/5–2/5, asking which profile |
 | `⌥⇧\` | `balance-sizes` — reset the workspace to even splits |
+| `⌃⌘F` | Fill the workspace with this window — **not** macOS fullscreen, so the layout survives |
 | `⌥⇧space` | Open the `chill` scene on an empty workspace (also left-click the ☕ button) |
 | `⌥⇧⌫` | Close the scene on the focused workspace (also right-click ☕) |
 

@@ -216,6 +216,20 @@ SketchyBar's `media_change` event is built on it and can't be relied on. The
 now-playing chip reads Apple Music over AppleScript instead, polling on a 5s
 `update_freq`, with `media_change` still subscribed as a bonus trigger.
 
+## Native fullscreen loses the layout
+
+macOS native fullscreen moves the window to a **Space of its own**. AeroSpace
+has to re-adopt it on the way back, and the tiling order is not reliably what it
+was — intermittently, windows come back in a different order.
+
+`aerospace fullscreen` is a different thing: the window fills its workspace and
+never leaves it, so the layout is untouched. Verified — order identical before
+and after.
+
+`ctrl-cmd-f` is therefore bound to `fullscreen`, taking over the shortcut macOS
+uses for the native one. The green traffic-light button still does native
+fullscreen when that is genuinely what you want (a video, say).
+
 ## AeroSpace quirks
 
 - **It lies about success.** `layout tiling` returns 0 and reports "already

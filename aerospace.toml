@@ -137,6 +137,13 @@ gaps.outer.right =      10
     # Same, but summons an existing window of any app instead of opening one.
     # alt-shift-0 = 'exec-and-forget $HOME/.local/bin/dot scene open messaging'
     alt-shift-backslash = 'balance-sizes'
+
+    # AeroSpace's own fullscreen, bound over the macOS shortcut. Native
+    # fullscreen moves the window to its own Space, and the tiling order is
+    # not always restored when it comes back; this keeps the window in its
+    # workspace so the layout survives. The green button still does the
+    # native one if you actually want it.
+    ctrl-cmd-f = 'fullscreen'
     # Command palette: every action in one place, with its keybinding shown.
     alt-space = 'exec-and-forget $HOME/.local/bin/dot menu'
 

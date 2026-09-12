@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+#
+# AeroSpace's own fullscreen: the window fills its workspace, and the workspace
+# keeps its layout. This is not macOS native fullscreen, which moves the window
+# to a Space of its own -- AeroSpace then has to re-adopt it on the way back,
+# and the tiling order is not always what it was.
+
+set -u
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+
+if [ "${1:-}" = "--describe" ]; then
+  jq -n --arg kb "$(keysym "$(keybinding "= 'fullscreen'")")" '{
+    id: "window.fullscreen",
+    summary: "Fill the workspace with the focused window (not macOS fullscreen)",
+    args: [{name: "on|off", required: false, default: "toggle"},
+           {name: "--no-outer-gaps", required: false}],
+    destructive: false,
+    verify: "dot window list --json",
+    note: "keeps the window in its workspace, so the layout survives",
+    instances: [{label: "Fullscreen this window", detail: $kb, args: []}]
+  }'
+  exit 0
+fi
+
+audit "window fullscreen ${*:-toggle}"
+exec "$AEROSPACE" fullscreen "$@"
