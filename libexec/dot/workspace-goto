@@ -4,21 +4,23 @@ source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
 if [ "${1:-}" = "--describe" ]; then
   current="$("$AEROSPACE" list-workspaces --focused)"
+  # One windows query and one jq for the whole list. Looping with an aerospace
+  # call plus a jq per workspace made this the slowest probe on the ⌥space path.
   instances="$(
-    "$AEROSPACE" list-workspaces --monitor all --empty no | while read -r ws; do
-      [ -n "$ws" ] && [ "$ws" != "$current" ] || continue
-      # A scene workspace should say what it is, not list its browser windows.
-      scene="$(awk -F'\t' -v w="$ws" '$1 == w { print $2; exit }' \
-               "$STATE_DIR/scenes" 2>/dev/null)"
-      if [ -n "$scene" ]; then
-        detail="scene: $scene"
-      else
-        detail="$("$AEROSPACE" list-windows --workspace "$ws" --format '%{app-name}' \
-                  | sort -u | paste -sd ', ' -)"
-      fi
-      jq -n --arg ws "$ws" --arg d "$detail" \
-        '{label: ("Go to workspace " + $ws), detail: $d, args: [$ws]}'
-    done | jq -s '.')"
+    "$AEROSPACE" list-windows --monitor all --format '%{workspace}|%{app-name}' \
+      | sort -u \
+      | jq -R -s --arg cur "$current" \
+            --arg state "$(cat "$STATE_DIR/scenes" 2>/dev/null)" '
+          ($state | split("\n") | map(select(length>0) | split("\t"))
+                  | map({(.[0]): .[1]}) | add // {}) as $scenes
+          | split("\n") | map(select(length>0) | split("|"))
+          | group_by(.[0])
+          | map({ws: .[0][0], apps: (map(.[1]) | join(", "))})
+          | map(select(.ws != $cur))
+          | map({label: ("Go to workspace " + .ws),
+                 detail: (if $scenes[.ws] then "scene: " + $scenes[.ws] else .apps end),
+                 args: [.ws]})')"
+
   jq -n --argjson instances "$instances" '{
     id: "workspace.goto",
     summary: "Focus a workspace",

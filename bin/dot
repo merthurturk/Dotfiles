@@ -32,7 +32,15 @@ LIBEXEC="$DOT_ROOT/libexec/dot"
 die() { printf 'dot: %s\n' "$*" >&2; exit 1; }
 
 # _lib.sh is shared code, not a command.
-list_commands() { ls "$LIBEXEC" 2>/dev/null | grep -v '^_' | sort; }
+list_commands() {
+  local f b
+  for f in "$LIBEXEC"/*; do
+    [ -e "$f" ] || continue
+    b="${f##*/}"
+    case "$b" in _*) continue ;; esac
+    printf '%s\n' "$b"
+  done | sort
+}
 
 usage() {
   cat <<EOF
@@ -57,16 +65,27 @@ EOF
 # --- capability discovery -------------------------------------------------
 
 capabilities() {
-  local json="[]" c d
+  # Descriptors are computed live -- instances track open scenes, occupied
+  # workspaces and so on -- so this can't be cached. It is on the latency path
+  # for every ⌥space, so it runs the probes concurrently and assembles once.
+  # Serially, with a jq to validate and another to append per capability, this
+  # took 520ms; the appends also re-serialised a growing array each time.
+  local tmp c
+  tmp="$(mktemp -d)"
+
   while IFS= read -r c; do
     [ -n "$c" ] || continue
-    d="$("$LIBEXEC/$c" --describe 2>/dev/null)"
-    if [ -n "$d" ] && printf '%s' "$d" | jq -e . >/dev/null 2>&1; then
-      json="$(printf '%s' "$json" | jq --argjson x "$d" --arg cmd "${c/-/ }" \
-              '. + [$x + {command: ("dot " + $cmd)}]')"
-    fi
+    {
+      "$LIBEXEC/$c" --describe 2>/dev/null \
+        | jq -c --arg cmd "dot ${c/-/ }" '. + {command: $cmd}' 2>/dev/null \
+        > "$tmp/$c"
+    } &
   done < <(list_commands)
-  printf '%s\n' "$json"
+  wait
+
+  # Filenames sort the same way list_commands does, so order is unchanged.
+  cat "$tmp"/* 2>/dev/null | jq -s '.'
+  rm -rf "$tmp"
 }
 
 # --- dispatch -------------------------------------------------------------
