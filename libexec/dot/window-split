@@ -5,12 +5,14 @@ if [ "${1:-}" = "--describe" ]; then
   jq -n --arg kb "$(keysym "$(keybinding 'dot window split')")" '{
     id: "window.split",
     summary: "Open a new Chrome window beside the focused one",
-    args: [{name:"ratio", required:false, default:"0.6"},
+    args: [{name:"--new-workspace", required:false},
+           {name:"ratio", required:false, default:"0.6"},
            {name:"profile", required:false}],
+    note: "in the profile picker, shift+return opens on a fresh workspace instead",
     destructive: false,
     instances: [{label:"Chrome beside this window", detail:$kb, args:["0.6"]}]
   }'
   exit 0
 fi
 audit "window split ${*:-}"
-exec "$DOT_ROOT/config/aerospace/chrome-split.sh" "${1:-0.6}" "${2:-}"
+exec "$DOT_ROOT/config/aerospace/chrome-split.sh" "$@"
