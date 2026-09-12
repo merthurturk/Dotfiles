@@ -120,6 +120,11 @@ The way out isn't a macOS API at all: it's the terminal protocol. OSC 10, 11,
 writing them to the pane's tty repaints it instantly — no permission, no
 keystroke, no focus change. `dot theme set` does that for every open pane.
 
+Two other things about it, learned the hard way: `-e <cmd>` opens a window
+running a command and `--working-directory` sets its cwd, but Ghostty **doesn't
+answer AppleScript** and ignores `aerospace close` on a window whose command has
+already exited — those have to be closed with ⌘W.
+
 The approach this replaced registered a global hotkey for `reload_config` and
 pressed it from outside. Two things sank it: a running Ghostty only knows the
 keybinds it launched with, so the chord did nothing until the config had
@@ -246,10 +251,10 @@ fullscreen when that is genuinely what you want (a video, say).
   login inherit a bare launchd `PATH` with no Homebrew.
 - **`$HOME` expands in `exec-and-forget`** (it runs through a shell); `~` does
   not.
-
-## Ghostty
-
-- `-e <cmd>` opens a window running a command; `--working-directory` sets cwd.
-- **No CLI config reload** — `reload_config` is a keybind action (⌘⇧,).
-- **Doesn't answer AppleScript**, and ignores `aerospace close` on a window
-  whose command has exited. Such a window has to be closed with ⌘W.
+- **An empty workspace can't hold focus.** Activating an app moves focus, and
+  with no window to hold it AeroSpace falls back to the previously focused
+  window — so a new window is born on the *old* workspace. Capture the target
+  before opening anything and move windows by id; never switch first and trust
+  focus to stay. This has caused three separate bugs: scenes opening on the
+  wrong workspace, `dot ai` doing the same, and `chrome-split` waiting for a
+  window on a workspace it was no longer on.

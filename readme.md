@@ -76,6 +76,7 @@ clickable items — the ring is the whole affordance available.
 |---|---|
 | `⌥space` | **Command palette** — every action, searchable, with its keybinding shown |
 | `⌥⇧↩` | New Chrome window beside the focused one at 3/5–2/5, asking which profile |
+| ⇧↩ *in that picker* | …open it on a fresh workspace instead of beside |
 | `⌥⇧\` | `balance-sizes` — reset the workspace to even splits |
 | `⌃⌘F` | Fill the workspace with this window — **not** macOS fullscreen, so the layout survives |
 | `⌥⇧space` | Open the `chill` scene on an empty workspace (also left-click the ☕ button) |
@@ -370,41 +371,8 @@ dot menu --dry-run           # print the palette without a GUI
 
 ## Notes worth keeping
 
-Things that cost real time to work out, recorded so they don't have to be
-rediscovered:
-
-- **macOS ships bash 3.2**, which has no associative arrays — string subscripts
-  silently collapse to index `0`. Scripts here group with `awk` instead.
-- **Notched displays reserve 38pt** at the top even with the menu bar hidden, and
-  AeroSpace measures `gaps.outer.top` from the *visible* frame. Hence the
-  per-monitor gap: `[{ monitor."built-in" = 12 }, 50]`.
-- **macOS 26 draws window corners as squircles** (superellipse n≈4.5). SketchyBar
-  draws circular corners, so 16pt is the matching radius. Nested radii follow
-  `inner = outer - inset`, with the inset kept *uniform* on all four sides.
-- **`resize width` sets the node width**, which carries half the inner gap — the
-  visible window lands `inner_gap/2` narrower than asked. `split-lib.sh` adds it
-  back.
-- **`[exec]` must be the last table in `aerospace.toml`** — a TOML table captures
-  every key after it. It sets `PATH` so bindings can find Homebrew binaries,
-  since GUI apps launched at login inherit a bare launchd `PATH`.
-- **An empty workspace can't hold focus.** `open -a` activates the app, which
-  moves focus; with no window on the workspace AeroSpace falls back to the
-  previously focused window, so new windows are born on the *old* workspace.
-  `scene.sh` therefore opens windows wherever they land and moves them by
-  window id, rather than switching first and trusting focus to stay.
-- **Only sketchybar has Full Disk Access**, so it's the only process that can
-  read the Focus database. `focus.sh` publishes what it reads to
-  `~/.local/state/aerospace/focus`; the launcher (run by AeroSpace, which has no
-  FDA) reads that file instead of the database.
-- **Latte's peach can't carry text.** As a solid fill it measures 2.64:1 with
-  white and 2.68:1 with dark text — neither passes. Scene badges therefore use a
-  pale tint with a deep saturated foreground (5.92:1), flipping to the deep
-  colour as a fill only when focused (7.4:1 on white).
-- **App names can carry invisible characters.** WhatsApp reports as
-  `\u200eWhatsApp` (a leading left-to-right mark), so `$2 == "WhatsApp"` never
-  matches and callers wrongly conclude it isn't running. `find_app_window` in
-  `split-lib.sh` compares with non-alphanumerics stripped.
-- **MediaRemote was restricted in macOS 15.4**, so SketchyBar's `media_change`
-  event is unreliable; the now-playing chip uses AppleScript.
-- No `/Users/<name>` or `/opt/homebrew` paths in the configs — `$HOME` and the
-  `[exec]` `PATH` keep them portable across machines and CPU architectures.
+The things that cost real time here — TCC, bash 3.2's missing associative
+arrays, squircle corners, notch insets, invisible characters in app names,
+AeroSpace reporting success while doing nothing — are recorded in
+[docs/macos.md](docs/macos.md) rather than repeated here, so there is one copy
+to keep true.
