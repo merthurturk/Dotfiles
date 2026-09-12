@@ -9,10 +9,21 @@ import AppKit
 // on the right and is searchable along with the label.
 //
 // Prints the chosen line's label to stdout and exits 0; exits 1 when cancelled.
-// Styling follows the sketchybar bar: Catppuccin Latte, 16pt outer radius with
-// concentric 8pt rows, Berkeley Mono text.
+// Styling follows the sketchybar bar: the active theme's palette, 16pt outer
+// radius with concentric 8pt rows, Berkeley Mono text.
 
-// MARK: - Palette (Catppuccin Latte)
+// MARK: - Palette
+//
+// Read from the same file the bar reads -- ~/.config/sketchybar/colors.sh is a
+// symlink into the active theme -- so the picker cannot be on a different
+// palette than the bar it appears over. It used to hold Catppuccin Latte's
+// values as literals, which was fine until there was more than one theme.
+//
+// Parsing shell from Swift is narrow on purpose: `export NAME=0xaarrggbb`, plus
+// `export NAME=$OTHER` because the roles are defined that way (WS_ACTIVE_BG is
+// usually an accent by reference). Anything else is skipped, and every colour
+// falls back to the Latte value it had before, so a malformed or missing file
+// degrades to the old look rather than to a blank window.
 
 func hex(_ v: UInt32, _ a: CGFloat = 1) -> NSColor {
     NSColor(srgbRed: CGFloat((v >> 16) & 0xff) / 255,
@@ -20,13 +31,46 @@ func hex(_ v: UInt32, _ a: CGFloat = 1) -> NSColor {
             blue:    CGFloat(v & 0xff) / 255,
             alpha:   a)
 }
-let cBase    = hex(0xeff1f5)
-let cMantle  = hex(0xe6e9ef)
-let cText    = hex(0x4c4f69)
-let cSubtext = hex(0x6c6f85)
-let cSurface = hex(0xccd0da)
-let cBlue    = hex(0x1e66f5)
-let cOverlay = hex(0x9ca0b0)
+
+let themePalette: [String: UInt32] = {
+    let url = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".config/sketchybar/colors.sh")
+    guard let text = try? String(contentsOf: url, encoding: .utf8) else { return [:] }
+    var out: [String: UInt32] = [:]
+    for raw in text.split(separator: "\n") {
+        guard raw.hasPrefix("export ") else { continue }
+        let body = raw.dropFirst("export ".count)
+        guard let eq = body.firstIndex(of: "=") else { continue }
+        let key = String(body[body.startIndex..<eq]).trimmingCharacters(in: .whitespaces)
+        var value = String(body[body.index(after: eq)...])
+        if let comment = value.firstIndex(of: "#") { value = String(value[..<comment]) }
+        value = value.trimmingCharacters(in: .whitespaces)
+        if value.hasPrefix("$") {
+            // A role defined as another colour: colors.sh always defines the
+            // target above the reference, so one pass is enough.
+            if let v = out[String(value.dropFirst())] { out[key] = v }
+        } else if value.hasPrefix("0x"), let v = UInt32(value.dropFirst(2), radix: 16) {
+            out[key] = v & 0x00ff_ffff        // drop the alpha byte
+        }
+    }
+    return out
+}()
+
+func themed(_ name: String, _ fallback: UInt32, alpha: CGFloat = 1) -> NSColor {
+    hex(themePalette[name] ?? fallback, alpha)
+}
+
+let cBase    = themed("BASE",     0xeff1f5)
+let cMantle  = themed("MANTLE",   0xe6e9ef)
+let cText    = themed("TEXT",     0x4c4f69)
+let cSubtext = themed("SUBTEXT",  0x6c6f85)
+let cSurface = themed("SURFACE0", 0xccd0da)
+let cOverlay = themed("OVERLAY0", 0x9ca0b0)
+// The selected row uses the same pair as the bar's focused workspace pill, so
+// "this is the one" is one colour wherever it appears -- pill, window outline,
+// picker row.
+let cAccent   = themed("WS_ACTIVE_BG", 0x1e66f5)
+let cOnAccent = themed("WS_ACTIVE_FG", 0xeff1f5)
 
 // Text font matches the bar and terminal. Berkeley Mono installs each weight as
 // its own family, so it's selected by PostScript name; falls back to the system
@@ -59,6 +103,11 @@ let inputMode = ProcessInfo.processInfo.environment["PICKER_MODE"] == "input"
 
 // Optional multi-line text shown above the field, e.g. a plan awaiting consent.
 let headerText = ProcessInfo.processInfo.environment["PICKER_HEADER"] ?? ""
+
+// An optional second action on the same row. When set, shift+return prints the
+// same label but exits 2, so the caller can offer a variant -- "open here" vs
+// "open in a new workspace" -- without doubling the number of rows.
+let altHint = ProcessInfo.processInfo.environment["PICKER_ALT_HINT"] ?? ""
 
 // MARK: - Frecency
 //
@@ -173,9 +222,9 @@ final class RowView: NSView {
 
     var selected = false {
         didSet {
-            layer?.backgroundColor = selected ? cBlue.cgColor : NSColor.clear.cgColor
-            label.textColor  = selected ? cBase : cText
-            detail.textColor = selected ? cBase.withAlphaComponent(0.75) : cOverlay
+            layer?.backgroundColor = selected ? cAccent.cgColor : NSColor.clear.cgColor
+            label.textColor  = selected ? cOnAccent : cText
+            detail.textColor = selected ? cOnAccent.withAlphaComponent(0.75) : cOverlay
         }
     }
 
@@ -285,7 +334,11 @@ final class Picker: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         let hint = NSTextField(labelWithString: "↑↓ navigate    ↵ select    esc cancel")
         hint.font = uiFont(11)
         hint.textColor = cOverlay
-        if inputMode { hint.stringValue = "↵ submit    esc cancel" }
+        if inputMode {
+            hint.stringValue = "↵ submit    esc cancel"
+        } else if !altHint.isEmpty {
+            hint.stringValue = "↵ select    ⇧↵ \(altHint)    esc cancel"
+        }
 
         for v in [header, glyph, field, rule, stack, empty, footerBar, hint] {
             v.translatesAutoresizingMaskIntoConstraints = false
@@ -337,7 +390,9 @@ final class Picker: NSObject, NSTextFieldDelegate, NSWindowDelegate {
             switch e.keyCode {
             case 125: self.move(1);  return nil          // down
             case 126: self.move(-1); return nil          // up
-            case 36, 76: self.accept(); return nil       // return / enter
+            case 36, 76:                                  // return / enter
+                self.accept(alt: !altHint.isEmpty && e.modifierFlags.contains(.shift))
+                return nil
             case 53: self.cancel(); return nil           // esc
             default: return e
             }
@@ -416,7 +471,7 @@ final class Picker: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         rebuild()
     }
 
-    func accept() {
+    func accept(alt: Bool = false) {
         if inputMode {
             let typed = field.stringValue.trimmingCharacters(in: .whitespaces)
             if typed.isEmpty { cancel(); return }
@@ -426,7 +481,9 @@ final class Picker: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         guard sel < shown.count, !rows.isEmpty else { cancel(); return }
         recordChoice(shown[sel].label)
         FileHandle.standardOutput.write((shown[sel].label + "\n").data(using: .utf8)!)
-        exit(0)
+        // 2 distinguishes the alternate action from the normal one; the label
+        // is identical either way, so callers branch on the status.
+        exit(alt ? 2 : 0)
     }
 
     func cancel() { exit(1) }
@@ -438,7 +495,7 @@ final class Picker: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         panel.makeKeyAndOrderFront(nil)
         panel.makeFirstResponder(field)
         // The caret defaults to the system accent colour; tie it to the theme.
-        (field.currentEditor() as? NSTextView)?.insertionPointColor = cBlue
+        (field.currentEditor() as? NSTextView)?.insertionPointColor = cAccent
     }
 }
 

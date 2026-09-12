@@ -24,7 +24,7 @@ export OVERLAY1=0xff8c8fa1
 
 # Foregrounds
 export TEXT=0xff4c4f69
-export SUBTEXT=0xff6c6f85
+export SUBTEXT=0xff64667b   # darkened: 4.06:1 on GROUP_BG failed
 
 # Accents
 export ROSEWATER=0xffdc8a78
@@ -39,7 +39,7 @@ export GREEN=0xff40a02b
 export TEAL=0xff179299
 export SKY=0xff04a5e5
 export SAPPHIRE=0xff209fb5
-export BLUE=0xff1e66f5
+export BLUE=0xff1660f5      # darkened: white on Latte blue was 4.34:1
 export LAVENDER=0xff7287fd
 
 export TRANSPARENT=0x00000000
@@ -60,7 +60,7 @@ export GROUP_BORDER=0xffccd0da
 # Workspace pill states
 export WS_ACTIVE_BG=$BLUE
 export WS_ACTIVE_FG=0xffeff1f5
-export WS_ACTIVE_BORDER=0xff1e66f5
+export WS_ACTIVE_BORDER=$BLUE
 export WS_OCCUPIED_BG=0xffdce0e8
 export WS_OCCUPIED_FG=$TEXT
 export WS_OCCUPIED_BORDER=0xffccd0da
@@ -99,3 +99,7 @@ export BADGE_GREEN_DEEP=0xff2d6a1f
 # ruling a line around everything on screen.
 export WINDOW_BORDER_ACTIVE=$BLUE
 export WINDOW_BORDER_INACTIVE=$SURFACE1
+
+# Wallpaper. Which accents burn through the stone, in order -- white opal is
+# milky with blue and violet in it.
+export WALLPAPER_ACCENTS="BLUE LAVENDER MAUVE TEAL"

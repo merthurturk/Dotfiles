@@ -110,6 +110,26 @@ fi
 theme="$(cat "$STATE/theme" 2>/dev/null)"
 [ -n "$theme" ] && ok "theme: $theme" || meh "no theme recorded - run dot theme set <name>"
 
+# A dark theme with macOS still in light mode means every unthemed window
+# disagrees with the bar. dot theme set drives this; it can drift if the
+# appearance is changed by hand afterwards.
+if [ -n "$theme" ] && [ -f "$REPO/themes/$theme/meta.json" ]; then
+  want="$(jq -r '.appearance // "light"' "$REPO/themes/$theme/meta.json")"
+  is_dark="$(osascript -e 'tell application "System Events" to tell appearance preferences to get dark mode' 2>/dev/null)"
+  case "$is_dark" in
+    true)  now=dark ;;
+    false) now=light ;;
+    *)     now="" ;;
+  esac
+  if [ -z "$now" ]; then
+    meh "cannot read the macOS appearance - grant Automation for System Events, then: dot theme set $theme"
+  elif [ "$now" = "$want" ]; then
+    ok "macOS appearance is $now, matching $theme"
+  else
+    meh "macOS is in $now mode but $theme is a $want theme - run dot theme set $theme"
+  fi
+fi
+
 # The desktop picture and the screen saver are the two surfaces the bar can't
 # repaint itself, so they are the ones that quietly fall behind the theme.
 if [ -n "$theme" ] && [ -x "$REPO/config/aerospace/bin/wallpaper" ]; then
@@ -123,6 +143,46 @@ if [ -n "$theme" ] && [ -x "$REPO/config/aerospace/bin/wallpaper" ]; then
           END { exit (seen > 0 && !stale) ? 0 : 1 }' \
       && ok "desktop picture and screen saver match $theme" \
       || meh "desktop picture or screen saver is off-theme - run dot theme wallpaper"
+  fi
+fi
+
+head_ "Reachable from the launcher"
+# Anything AeroSpace execs gets the [exec] PATH table from aerospace.toml, not
+# a login shell's PATH. Three separate bugs have come from assuming otherwise:
+# `dot` itself, and Ghostty's CLI twice. A tool that a terminal finds instantly
+# can be invisible to the palette.
+EXEC_PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+for tool in jq sketchybar osascript borders; do
+  if env -i PATH="$EXEC_PATH" command -v "$tool" >/dev/null 2>&1; then
+    ok "$tool"
+  else
+    no "$tool is not on the launcher's PATH - the palette can't run it"
+  fi
+done
+# These two are deliberately resolved by path rather than found on PATH.
+[ -x "$HOME/.local/bin/dot" ] && ok "dot (by path)" || no "$HOME/.local/bin/dot missing"
+
+head_ "Ghostty"
+# Ghostty has no IPC on macOS, so `dot theme set` reloads it by pressing a
+# global hotkey Ghostty itself registers. If that binding stops resolving, the
+# terminal quietly keeps the old palette and nothing says why.
+# Resolved the same way the capabilities do: PATH is not enough, because the
+# launcher does not have Ghostty's CLI on it.
+GHOSTTY="$(command -v ghostty 2>/dev/null)"
+[ -n "$GHOSTTY" ] || GHOSTTY=/Applications/Ghostty.app/Contents/MacOS/ghostty
+if [ -x "$GHOSTTY" ]; then
+  # Open panes are repainted over their ttys, so what matters is that Ghostty
+  # can resolve the active theme at all.
+  if "$GHOSTTY" +show-config 2>/dev/null | grep -q '^background '; then
+    ok "resolves the active theme ($("$GHOSTTY" +show-config 2>/dev/null | awk '$1=="background"{print $3}'))"
+  else
+    no "ghostty cannot resolve a background colour - check config/ghostty/theme.conf"
+  fi
+  # The colours have to come from the theme, never from the base config.
+  if grep -qE '^(theme|background|foreground|palette|cursor-color) ' "$REPO/config/ghostty/config"; then
+    no "config/ghostty/config sets colours - they belong in the theme's ghostty.conf"
+  else
+    ok "no colours outside the theme"
   fi
 fi
 

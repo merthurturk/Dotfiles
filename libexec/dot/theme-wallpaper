@@ -85,16 +85,24 @@ COLORS="$THEMES/$THEME/colors.sh"
 [ -f "$COLORS" ] || { echo "dot: no theme '$THEME'" >&2; exit 1; }
 
 # --- palette --------------------------------------------------------------
-# Four glows, in hue order of preference. Themes alias their accents freely --
-# Rose Pine Dawn maps BLUE, GREEN and PINE to one colour -- so duplicates are
-# skipped rather than drawn twice, which would collapse two glows into one.
+# Four glows. Which accents they use is the theme's decision, not this script's:
+# WALLPAPER_ACCENTS names them in order.
+#
+# It has to be the theme's, because a wallpaper is most of what a variant looks
+# like. With the order fixed here, every theme led with BLUE and MAUVE and the
+# warm variant came out a cool one with a peach corner -- the palettes differed
+# and the wallpapers didn't.
+#
+# The fallback keeps a theme that says nothing working. Duplicates are skipped
+# either way: themes alias accents freely (Rose Pine Dawn maps BLUE, GREEN and
+# pine to one colour) and two glows of one colour just collapse into one.
 
 # shellcheck source=/dev/null
 source "$COLORS"
 
 accents=""
 count=0
-for name in BLUE MAUVE PEACH TEAL PINK GREEN LAVENDER SAPPHIRE; do
+for name in ${WALLPAPER_ACCENTS:-BLUE MAUVE PEACH TEAL PINK GREEN LAVENDER SAPPHIRE}; do
   eval "value=\${$name:-}"
   [ -n "$value" ] || continue
   case " $accents " in *" $value "*) continue ;; esac
@@ -106,6 +114,11 @@ done
 
 # --- render ---------------------------------------------------------------
 
+# Light and dark want opposite things from the same accents, so the renderer
+# is told which this is rather than guessing from the colours.
+APPEARANCE="$(jq -r '.appearance // "light"' "$THEMES/$THEME/meta.json")"
+# Which composition. A wash by default; a theme that wants a picture says so.
+STYLE="${WALLPAPER_STYLE:-glow}"
 SIZE="$("$WALLPAPER" size)"
 mkdir -p "$CACHE"
 IMAGE="$CACHE/$THEME-$SIZE.png"
@@ -116,7 +129,7 @@ if [ -f "$IMAGE" ] && [ "$IMAGE" -nt "$COLORS" ] && [ "$IMAGE" -nt "$WALLPAPER" 
   echo "wallpaper: $THEME, already rendered at $SIZE"
 else
   # shellcheck disable=SC2086
-  "$WALLPAPER" render "$IMAGE" "$SIZE" "$BASE" "$CRUST" $accents >/dev/null || exit 1
+  "$WALLPAPER" render "$IMAGE" "$SIZE" "$APPEARANCE" "$STYLE" "$BASE" "$CRUST" $accents >/dev/null || exit 1
   echo "wallpaper: rendered $SIZE from $THEME's palette"
 fi
 

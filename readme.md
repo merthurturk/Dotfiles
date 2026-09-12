@@ -1,11 +1,22 @@
 # dotfiles
 
 macOS setup: [AeroSpace](https://nikitabobko.github.io/AeroSpace/) tiling driving
-[SketchyBar](https://felixkratz.github.io/SketchyBar/), themed **Opal White** —
-pale surfaces, colour kept for the things that carry meaning, and edges drawn
-rather than shadows cast. The palette derives from
-[Catppuccin Latte](https://github.com/catppuccin/catppuccin). Ghostty reads the
-same file, so terminal and bar are one surface.
+[SketchyBar](https://felixkratz.github.io/SketchyBar/), themed **Opal** — pale
+surfaces, colour kept for the things that carry meaning, and edges drawn rather
+than shadows cast.
+
+```sh
+dot theme set opal-white    # the pale one (derives from Catppuccin Latte)
+dot theme set opal-fire     # warm surfaces, terracotta accent
+dot theme set opal-black    # dark; takes macOS dark mode with it
+dot theme set synthwave     # neon, and the wallpaper has a sun and a grid
+```
+
+Switching takes the whole desk with it: the bar, the window outlines, the
+wallpaper and screen saver, macOS's own light/dark setting, and the terminal —
+Ghostty has no IPC on macOS, so open panes are repainted with OSC escape
+sequences written to their ttys. Every colour that carries text is measured
+against 4.5:1 by `bin/check-themes.sh`.
 
 ## Install on a new Mac
 

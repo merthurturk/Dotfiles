@@ -60,6 +60,18 @@ did once.
 Read it from `aerospace.toml` with `keybinding()` in `_lib.sh`. A hand-written
 hint drifts from the binding it describes.
 
+### The launcher's PATH is not your shell's
+
+Anything AeroSpace execs — the palette, every keybinding — gets the `[exec]`
+`PATH` table in `aerospace.toml`, which has no `~/.local/bin` and no app
+bundles. A capability must reach its tools by a resolved path, not by hoping
+they are on `PATH`: `_lib.sh` does this for `aerospace` and `ghostty`, and
+every keybinding spells out `$HOME/.local/bin/dot`.
+
+Three bugs have come from forgetting it, all with the same signature — works
+perfectly in a terminal, silently does nothing from the launcher. `dot doctor`
+now checks the tools against that PATH.
+
 ### No absolute paths
 
 No `/Users/<name>`, no `/opt/homebrew`. Use `$HOME`, and the `[exec]` `PATH`
@@ -79,6 +91,12 @@ Surfaces are separated by drawing their edge — the bar, the chips, the windows
 everything else; a future theme is free to disagree, but it has to say so in
 its own `colors.sh`.
 
+### Contrast is measured, not chosen
+
+Every colour a theme puts text on is checked by `bin/check-themes.sh`, which
+the pre-commit hook runs. It was written after the hand-checked palette turned
+out to ship a focused workspace pill at 4.34:1. Don't add a theme by eye.
+
 macOS's own window shadow is the exception: it cannot be written from an
 unprivileged process. Don't try again — three SkyLight routes are measured in
 [macos](docs/macos.md), and all three return success while changing nothing.
@@ -95,7 +113,8 @@ By both `exec-and-forget` and `click_script`. Anything user-facing sources
 ```sh
 dot doctor                   # the live system, including GUI-only steps
 bin/check-capabilities.sh    # every descriptor is valid
-githooks/pre-commit          # syntax + shellcheck + the above
+bin/check-themes.sh          # every theme's text clears 4.5:1
+githooks/pre-commit          # syntax + shellcheck + the above two
 ```
 
 The hook runs on commit. Don't `--no-verify` past it without saying why.

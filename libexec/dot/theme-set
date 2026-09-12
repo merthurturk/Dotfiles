@@ -39,7 +39,91 @@ ln -sfn "$DIR/ghostty.conf" "$DOT_ROOT/config/ghostty/theme.conf"
 mkdir -p "$STATE_DIR"; printf '%s\n' "$THEME" > "$STATE_DIR/theme"
 audit "theme set $THEME"
 
+# macOS appearance is theme data. A dark variant that leaves the system in
+# light mode puts every unthemed app -- Finder, System Settings, every dialog
+# -- at odds with the bar, so switching themes has to switch this too.
+#
+# There is no CLI for it; System Events is the supported route, and it needs
+# Automation permission (granted once, on first prompt). And since it is an
+# AppleScript round-trip, the result is read back rather than assumed.
+APPEARANCE="$(jq -r '.appearance // "light"' "$DIR/meta.json")"
+want=false; [ "$APPEARANCE" = "dark" ] && want=true
+osascript -e "tell application \"System Events\" to tell appearance preferences to set dark mode to $want" 2>/dev/null
+got="$(osascript -e 'tell application "System Events" to tell appearance preferences to get dark mode' 2>/dev/null)"
+if [ "$got" = "$want" ]; then
+  appearance_note="  macOS appearance: $APPEARANCE"
+else
+  appearance_note="  macOS appearance: still $([ "$got" = true ] && echo dark || echo light) -- grant Automation for System Events (dot doctor says where)"
+fi
+
 sketchybar --reload 2>/dev/null
+
+# Repaint every open Ghostty pane, without a reload.
+#
+# Ghostty has no IPC and re-reads its config only when told to -- but it is
+# still a terminal, and a terminal repaints itself when you write OSC escape
+# sequences to its tty. OSC 10/11/12 set foreground, background and cursor;
+# OSC 4 sets a palette entry. No keystroke, no permission, no focus.
+#
+# The colours come from `ghostty +show-config`, which is Ghostty's own resolved
+# view of the active theme.conf -- so a theme that points at an upstream
+# palette (`theme = Catppuccin Latte`) works exactly like one that spells every
+# colour out.
+ghostty_repaint() {
+  local gpid seq t painted=0
+  gpid="$(ps -Ao pid,comm= | awk '/Ghostty\.app/ { print $1; exit }')"
+  [ -n "$gpid" ] || return 2
+
+  seq="$("$GHOSTTY" +show-config 2>/dev/null | awk '
+    $1 == "background"   { printf "\033]11;%s\007", $3 }
+    $1 == "foreground"   { printf "\033]10;%s\007", $3 }
+    $1 == "cursor-color" { printf "\033]12;%s\007", $3 }
+    $1 == "palette"      { split($3, kv, "="); printf "\033]4;%s;%s\007", kv[1], kv[2] }')"
+  [ -n "$seq" ] || return 1
+
+  # One tty per pane: each is a child of the Ghostty process.
+  for t in $(ps -Ao ppid,tty | awk -v p="$gpid" '$1 == p && $2 ~ /^ttys/ { print $2 }' | sort -u); do
+    printf '%s' "$seq" > "/dev/$t" 2>/dev/null && painted=$((painted + 1))
+  done
+  [ "$painted" -gt 0 ] || return 1
+  printf '%s' "$painted"
+}
+
+# Ghostty's own ⌘⇧, is registered by *every* running instance, but a keystroke
+# lands on whatever is frontmost -- so it is only usable when Ghostty already
+# is. Preferred when available, because it cannot miss.
+ghostty_reload_frontmost() {
+  local front
+  front="$(osascript -e 'tell application "System Events" to get name of first application process whose frontmost is true' 2>/dev/null)"
+  case "$front" in
+    [gG]hostty) ;;
+    *) return 2 ;;
+  esac
+  osascript -e 'tell application "System Events" to keystroke "," using {command down, shift down}' \
+    >/dev/null 2>&1
+}
+
+ghostty_reload() {
+  # Not pgrep. macOS truncates a process's comm to 16 characters, and
+  # Ghostty's is the full bundle path -- so comm reads "/Applications/Gh" and
+  # every pgrep pattern, -x and -f alike, matches nothing at all. This check
+  # silently answered "not running" for a Ghostty that was right there, which
+  # is why the reload never fired.
+  ps -Ao comm= | grep -qi 'Ghostty\.app' || return 2
+  local chord key mods
+  chord="$(sed -n 's/^keybind = global:\(.*\)=reload_config$/\1/p' \
+           "$DOT_ROOT/config/ghostty/config" | head -1)"
+  [ -n "$chord" ] || return 2
+  key="${chord##*+}"
+  mods=""
+  case "$chord" in *ctrl+*)  mods="$mods, control down" ;; esac
+  case "$chord" in *alt+*)   mods="$mods, option down"  ;; esac
+  case "$chord" in *cmd+*)   mods="$mods, command down" ;; esac
+  case "$chord" in *shift+*) mods="$mods, shift down"   ;; esac
+  osascript -e "tell application \"System Events\" to keystroke \"$key\" using {${mods#, }}" \
+    >/dev/null 2>&1 || return 1
+  return 3   # sent, but only a Ghostty launched with the chord will catch it
+}
 
 # Window outlines read the same colors.sh through the bar's symlink, and a
 # second invocation retints the running instance rather than starting another.
@@ -52,9 +136,22 @@ else
 fi
 
 echo "theme: $THEME"
+echo "$appearance_note"
 echo "  bar reloaded."
 [ -n "$outlines" ] && echo "$outlines"
-echo "  Ghostty picks it up on its next config reload (⌘⇧, in a terminal)."
+if ps -Ao comm= | grep -qi 'Ghostty\.app'; then
+  panes="$(ghostty_repaint)"
+  if [ -n "$panes" ]; then
+    echo "  ghostty: repainted $panes open pane(s)."
+  else
+    echo "  ghostty: could not repaint -- press ⌘⇧, in it."
+  fi
+  # A repaint changes the panes; only a real reload updates the window chrome,
+  # and that is free when Ghostty is already the app receiving keystrokes.
+  ghostty_reload_frontmost && echo "  ghostty: reloaded too (it was frontmost)."
+else
+  echo "  ghostty isn't running; new windows start on this theme."
+fi
 
 # The desktop picture is generated from this theme's colors.sh too, so it has
 # to be regenerated here -- otherwise the one surface nobody looks at directly

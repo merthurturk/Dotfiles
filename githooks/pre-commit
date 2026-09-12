@@ -28,6 +28,12 @@ fi
 echo "pre-commit: capability surface"
 ./bin/check-capabilities.sh || fail=1
 
+echo "pre-commit: theme contrast"
+./bin/check-themes.sh >/dev/null || {
+  ./bin/check-themes.sh | grep -E "✗|missing" >&2
+  fail=1
+}
+
 if [ "$fail" -ne 0 ]; then
   echo "" >&2
   echo "pre-commit failed. Fix the above, or commit with --no-verify." >&2

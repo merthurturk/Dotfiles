@@ -7,6 +7,38 @@ A standalone AppKit chooser: auto-focused search field, fuzzy filter, arrows,
 enter, esc. Styled to match the bar — same palette, same Berkeley Mono, 16pt
 outer radius with concentric 8pt rows.
 
+## It reads the theme
+
+The palette is **not** compiled in. At launch the picker parses
+`~/.config/sketchybar/colors.sh` — the same symlink into the active theme that
+the bar reads — so it can't be on a different palette than the surface it
+appears over. It held Catppuccin Latte as literals until there was more than
+one theme to be wrong about.
+
+The parser is deliberately narrow: `export NAME=0xaarrggbb`, plus
+`export NAME=$OTHER`, because the roles are defined by reference
+(`WS_ACTIVE_BG=$PINK`). Trailing comments are stripped, the alpha byte is
+dropped, and anything else is ignored. Every colour falls back to its old Latte
+value, so a missing or malformed file degrades to the previous look rather than
+to an unreadable window.
+
+| Picker | Theme key |
+|---|---|
+| panel background | `BASE` |
+| footer bar | `MANTLE` |
+| label text | `TEXT` |
+| header | `SUBTEXT` |
+| border, rule | `SURFACE0` |
+| dimmed detail, hint | `OVERLAY0` |
+| **selected row** | `WS_ACTIVE_BG` / `WS_ACTIVE_FG` |
+
+The selected row deliberately uses the same pair as the bar's focused workspace
+pill, so "this is the one" is a single colour wherever it shows up — pill,
+window outline, picker row.
+
+A theme change needs no rebuild: the picker is launched fresh each time and
+reads the file on the way up.
+
 ## Interface
 
 Reads lines on stdin, prints the choice on stdout. Exit 1 on cancel.

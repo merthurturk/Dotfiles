@@ -152,8 +152,10 @@ Run bin/doctor.sh afterwards; it verifies every one of them.
    System Settings > Control Center > "Automatically hide and show the menu
    bar" > Always. The bar draws in that space.
 
-5. Automation permission for Music
-   Prompts by itself the first time the now-playing chip polls Music. Allow it.
+5. Automation permission for Music and System Events
+   Both prompt by themselves -- Music the first time the now-playing chip
+   polls it, System Events the first time `dot theme set` switches the macOS
+   light/dark appearance to match the theme. Allow both.
 
 Then check your work:
 

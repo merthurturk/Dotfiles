@@ -19,7 +19,7 @@ export OVERLAY1=0xff797593
 
 # Foregrounds
 export TEXT=0xff575279
-export SUBTEXT=0xff797593
+export SUBTEXT=0xff696582   # darkened: 3.67:1 on GROUP_BG failed
 
 # Accents, darkened for legibility on a light surface
 export ROSEWATER=0xff9a5d5a

@@ -52,5 +52,28 @@ done
 "$REPO/libexec/dot/menu" --dry-run >/dev/null 2>&1 \
   || { echo "menu --dry-run failed" >&2; fail=1; }
 
+# ...and every row it renders must map to a capability that exists. A
+# descriptor's `command` is a label ("dot theme set") that the menu turns back
+# into a path, so a row can render perfectly while pointing at nothing.
+#
+# Note what this does *not* cover: whether the resolved command can actually be
+# executed in the environment the menu runs in. The launcher once did nothing
+# for every theme because `dot` is absent from the PATH AeroSpace execs with,
+# and every file involved existed and was executable. That class of failure is
+# caught by the menu itself, which refuses to run a command it cannot resolve
+# and says so in the log.
+while IFS= read -r cmd; do
+  [ -n "$cmd" ] || continue
+  set -- $cmd                      # "dot theme set" -> dot / theme / set
+  shift                            # drop the "dot"
+  if   [ $# -ge 2 ] && [ -x "$LIBEXEC/$1-$2" ]; then :
+  elif [ $# -ge 1 ] && [ -x "$LIBEXEC/$1" ];     then :
+  else
+    echo "palette row is not runnable: $cmd" >&2
+    fail=1
+  fi
+done < <(DOT_ROOT="$REPO" "$REPO/bin/dot" capabilities --json \
+         | jq -r '.[] | select(((.instances // []) | length) > 0) | .command')
+
 [ "$fail" -eq 0 ] && echo "ok: $n capabilities valid, menu renders"
 exit "$fail"

@@ -11,6 +11,12 @@
 # shellcheck disable=SC2034
 DOT_ROOT="${DOT_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 AEROSPACE=/opt/homebrew/bin/aerospace
+# Ghostty's CLI lives inside the app bundle, and is on PATH only for
+# interactive shells -- its shell integration puts it there. Anything AeroSpace
+# execs gets the [exec] PATH table instead, which does not have it, so the
+# launcher would silently fail to reach a binary a terminal finds instantly.
+GHOSTTY="$(command -v ghostty 2>/dev/null)"
+[ -n "$GHOSTTY" ] || GHOSTTY=/Applications/Ghostty.app/Contents/MacOS/ghostty
 AERO_CONFIG="$HOME/.aerospace.toml"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/aerospace"
 SCENES_JSON="$DOT_ROOT/config/aerospace/scenes.json"

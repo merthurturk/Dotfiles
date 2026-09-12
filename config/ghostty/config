@@ -1,19 +1,17 @@
-# Theme — Catppuccin Latte, the same palette as the sketchybar config:
-# its background (#eff1f5) and foreground (#4c4f69) match colors.sh exactly.
-theme = Catppuccin Latte
+# No colours in this file. Every one of them -- palette, background, cursor,
+# split divider -- lives in theme.conf, which is a symlink into the active
+# theme. A colour here would silently outlive a theme change, and the terminal
+# would be the one surface still wearing the old palette.
 
 # Draw the titlebar in the terminal's own colours rather than following the
-# system appearance, so the whole window reads as one light surface.
+# system appearance, so the whole window reads as one surface.
 window-theme = ghostty
 
-# Accent tie-in: blue is the focused workspace pill in the bar and the
-# selected row in the picker. Latte's own cursor is rosewater, which reads as
-# unrelated next to the bar.
-cursor-color = #1e66f5
-
-# Divider matches the bar's border colour.
-split-divider-color = #bcc0cc
 unfocused-split-opacity = 0.92
+
+# No reload keybind is needed here. Ghostty has no IPC, but `dot theme set`
+# repaints open panes with OSC escape sequences written straight to their
+# ttys -- see libexec/dot/theme-set. New windows read this config anyway.
 
 # Font
 # Each Berkeley Mono weight installs as a separate family, so bold and italic

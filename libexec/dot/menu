@@ -50,5 +50,29 @@ CHOICE="$(cut -f1,2 "$MENU" \
 CMD="$(awk -F'\t' -v c="$CHOICE" '$1 == c { print $3; exit }' "$MENU")"
 [ -z "$CMD" ] && exit 1
 
+# A descriptor's `command` is the human- and agent-facing string -- "dot theme
+# set opal-fire" -- not a path. `dot` resolves on a shell's PATH, but the menu
+# runs under AeroSpace's `exec-and-forget`, whose PATH is the [exec] table in
+# aerospace.toml and does not include ~/.local/bin. Every keybinding spells out
+# $HOME/.local/bin/dot for exactly this reason; this is the one place that
+# built a command out of a label instead.
+#
+# Resolve it back to the dispatcher we were invoked through, so the menu works
+# wherever it is launched from.
+case "$CMD" in
+  "dot "*) CMD="$DOT_ROOT/bin/dot ${CMD#dot }" ;;
+esac
+
+# Refuse to run something unresolvable, loudly. logging.sh has stderr going to
+# ~/.local/state/aerospace/log, so a broken row leaves a trace instead of the
+# launcher appearing to shrug -- which is how the PATH problem above went
+# unnoticed for as long as it did.
+# shellcheck disable=SC2086
+set -- $CMD
+if [ ! -x "$1" ] && ! command -v "$1" >/dev/null 2>&1; then
+  echo "menu: cannot run '$1' (from row: $CHOICE)" >&2
+  exit 1
+fi
+
 # shellcheck disable=SC2086  # the command and its args are built above, not user input
 DOT_ACTOR=menu exec $CMD

@@ -101,6 +101,77 @@ So the shadow stays, and this setup outlines instead. The two shadows that
 (`com.apple.screencapture disable-shadow`, set by `install.sh`). `dot doctor`
 checks both.
 
+## awk is not gawk
+
+macOS ships the one-true-awk, so `strtonum` doesn't exist —
+`bin/check-themes.sh` parses hex by hand with `index()` into a digit string.
+Same family of surprise as bash 3.2: the script looks portable, and fails only
+on the machine it was written for.
+
+## Ghostty has no IPC on macOS
+
+`ghostty +new-window` answers "not supported on this platform", and there is no
+reload action in the CLI at all — `reload_config` is a keybind and nothing
+else. Anything outside Ghostty that wants it to re-read its config has to press
+a key.
+
+The way out isn't a macOS API at all: it's the terminal protocol. OSC 10, 11,
+12 and 4 set foreground, background, cursor and palette on a live pane, and
+writing them to the pane's tty repaints it instantly — no permission, no
+keystroke, no focus change. `dot theme set` does that for every open pane.
+
+The approach this replaced registered a global hotkey for `reload_config` and
+pressed it from outside. Two things sank it: a running Ghostty only knows the
+keybinds it launched with, so the chord did nothing until the config had
+already been reloaded by hand, and the check gating it was `pgrep` — see
+below.
+
+### Ghostty's CLI is inside the app bundle
+
+`ghostty` lives at `/Applications/Ghostty.app/Contents/MacOS/ghostty`, and is
+on `PATH` only because its shell integration puts it there for interactive
+shells. Nothing AeroSpace execs has it, so `ghostty +show-config` worked
+perfectly from a terminal and failed from the palette. `_lib.sh` resolves it
+once, with the bundle path as the fallback.
+
+### pgrep cannot see an app bundle's process
+
+`pgrep` lists 658 processes on this machine and Ghostty is in none of them,
+under any name:
+
+```sh
+pgrep -x ghostty      # 0 matches
+pgrep ghostty         # 0 matches
+pgrep -f ghostty      # 0 matches
+pgrep -f Ghostty.app  # 0 matches
+ps -Ao comm= | grep -i 'Ghostty\.app'   # found, pid and all
+```
+
+Meanwhile `ps -p <pid> -o comm=` prints `/Applications/Gh` and `-o ucomm=`
+prints `ghostty` — the same process reported three different ways by three
+tools. (The `/Applications/Gh` is `ps` truncating a display column, not the
+kernel truncating a name; `ps -Ao comm=` prints the path in full.)
+
+I could not establish *why* pgrep misses it, so treat this as measured
+behaviour rather than an explained one: **match app-bundle processes with
+`ps -Ao comm=`, not pgrep.** The reload above was gated on `pgrep -x ghostty`,
+which answered "not running" for a Ghostty in the foreground, so `dot theme
+set` skipped the work and reported success. Same family as WhatsApp's invisible
+character: matching a process or app by name is harder than it looks.
+
+## The light/dark appearance has no CLI
+
+Like Focus, macOS exposes no command for it. The supported route is System
+Events over AppleScript:
+
+```sh
+osascript -e 'tell application "System Events" to tell appearance preferences to set dark mode to true'
+```
+
+which needs **Automation** permission the first time it runs. `dot theme set`
+uses it to match the system to the theme's `appearance`, and reads the value
+back afterwards rather than trusting the call.
+
 ## bash is 3.2
 
 `/bin/bash` is 3.2 from 2007. **No associative arrays**: `declare -A` fails and
