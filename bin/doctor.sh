@@ -3,8 +3,8 @@
 # Checks that this setup is actually working, including the GUI-only steps
 # install.sh can only print instructions for.
 #
-# install.sh tells you to grant Full Disk Access and create two Shortcuts, then
-# has no way to know whether you did. This does.
+# install.sh can only print the GUI-only steps and has no way to know whether
+# you did them. This does.
 
 set -u
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
@@ -59,37 +59,9 @@ else
 fi
 
 head_ "Permissions"
-# The Focus chip says so itself when it can't read the TCC-protected database.
-focus_label="$(sketchybar --query focus 2>/dev/null | jq -r '.label.value // ""' 2>/dev/null)"
-if [ "$focus_label" = "Grant FDA" ]; then
-  no "sketchybar lacks Full Disk Access - the Focus chip can't read your Focus state"
-  printf '      System Settings > Privacy & Security > Full Disk Access > + > %s\n' "$(command -v sketchybar)"
-elif [ -f "$STATE/focus" ]; then
-  ok "sketchybar has Full Disk Access (Focus state readable)"
-else
-  meh "couldn't confirm Full Disk Access - is sketchybar running?"
-fi
 [ "$(defaults read NSGlobalDomain _HIHideMenuBar 2>/dev/null)" = "1" ] \
   && ok "menu bar auto-hides" \
   || meh "menu bar doesn't auto-hide - the bar draws in that space (Control Centre settings)"
-
-head_ "Shortcuts (the Focus toggle)"
-# Mirror focus_click.sh: directional shortcuts are preferred because they let
-# the bar pick the direction from the state it already reads, but a single
-# "Toggle Focus" is a perfectly good fallback and the handler uses it.
-have() { shortcuts list 2>/dev/null | grep -Fxq "$1"; }
-if have "Focus On" && have "Focus Off"; then
-  ok "\"Focus On\" + \"Focus Off\" (direction chosen from live state)"
-elif have "Toggle Focus"; then
-  ok "\"Toggle Focus\" (fallback; works)"
-  printf '      Optional: separate "Focus On"/"Focus Off" shortcuts let the bar\n'
-  printf '      pick the direction rather than relying on the toggle.\n'
-elif have "Focus On" || have "Focus Off"; then
-  meh "only one of \"Focus On\"/\"Focus Off\" exists - the other direction won't work"
-else
-  no "no Focus shortcut - clicking the Focus chip can't toggle"
-  printf '      Shortcuts.app > a shortcut named "Toggle Focus" with one Set Focus action\n'
-fi
 
 head_ "Built artefacts"
 [ -x "$REPO/config/aerospace/bin/picker" ] \

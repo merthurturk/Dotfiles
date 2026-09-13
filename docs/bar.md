@@ -15,7 +15,6 @@ SketchyBar, configured by `config/sketchybar/sketchybarrc`. Plugins live in
 | `front_app` | `front_app.sh` | focused app, with its glyph |
 | `music` | `music.sh` / `music_click.sh` | now playing; hidden when Music isn't running |
 | `status` | — | bracket grouping volume, battery, clock |
-| `focus` | `focus.sh` / `focus_click.sh` | macOS Focus chip |
 
 ## One script repaints all the pills
 

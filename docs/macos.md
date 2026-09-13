@@ -10,20 +10,15 @@ granted by any process, including an agent. There will always be a manual
 boundary. Design for it: `dot doctor` reports what's missing and exactly where
 to click, rather than pretending or working around it.
 
-Consequences:
+In practice that means AeroSpace needs Accessibility, or it reports success and
+moves nothing.
 
-- **Only SketchyBar has Full Disk Access**, so it alone can read the Focus
-  database. It publishes state to `~/.local/state/aerospace/focus` for everyone
-  else. Anything under AeroSpace has no FDA and must read that file.
-- AeroSpace needs Accessibility or it reports success and moves nothing.
-
-## Focus has no CLI
-
-macOS exposes no command to change Focus. The Shortcuts "Set Focus" action is
-the only supported route, and Shortcuts can't be created from a script either.
-So the user must make a shortcut by hand. `focus_click.sh` accepts either a
-`Focus On`/`Focus Off` pair (preferred — the bar picks the direction from state
-it already reads) or a single `Toggle Focus`.
+Nothing here needs **Full Disk Access** any more. A Focus indicator used to,
+because `~/Library/DoNotDisturb/DB` is TCC-protected, and it forced an awkward
+arrangement: SketchyBar held the grant and published state to a file for
+everything else to read. Removing the feature removed the requirement. The
+wallpaper store, despite living under Application Support, is readable without
+it.
 
 ## The wallpaper store has no API for half of itself
 

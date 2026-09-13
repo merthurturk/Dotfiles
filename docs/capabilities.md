@@ -50,7 +50,7 @@ one row each:
 ]
 ```
 
-Query commands — `dot scene list`, `dot window list`, `dot focus status` —
+Query commands — `dot scene list`, `dot window list`, `dot theme list` —
 declare none on purpose. Printing JSON into a GUI picker helps nobody; they are
 CLI and agent surface.
 

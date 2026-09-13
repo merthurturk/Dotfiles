@@ -172,18 +172,7 @@ sketchybar --add item front_app left \
            --subscribe front_app front_app_switched
 
 ##### Right side #####
-# Added right-to-left: focus ends up furthest right, music furthest left.
-
-sketchybar --add event focus_change
-
-sketchybar --add item focus right \
-           --set focus update_freq=5 \
-                 label.font="$FONT_BOLD:13.0" \
-                 icon.padding_left=9 \
-                 icon.padding_right=9 \
-                 script="$PLUGIN_DIR/focus.sh" \
-                 click_script="$PLUGIN_DIR/focus_click.sh" \
-           --subscribe focus focus_change system_woke mouse.entered mouse.exited
+# Added right-to-left: the clock ends up furthest right, music furthest left.
 
 sketchybar --add item clock right \
            --set clock update_freq=15 \

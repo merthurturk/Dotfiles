@@ -4,7 +4,7 @@
 #
 # On enter we only change the *border* colour, never the fill: these items have
 # state-driven backgrounds (a focused workspace pill is blue, an occupied one
-# grey, the Focus chip mauve when on, transparent when off) and a ring reads
+# grey, a scene badge tinted, the now-playing chip plain) and a ring reads
 # correctly on all of them without having to know which state we're in.
 #
 # On exit the item's own updater is re-run rather than restoring a hardcoded
@@ -24,9 +24,6 @@ case "$SENDER" in
       space.*)
         # Repaints every pill with its correct state colours.
         sketchybar --trigger aerospace_workspace_change
-        ;;
-      focus)
-        sketchybar --trigger focus_change
         ;;
       *)
         sketchybar --animate sin 8 --set "$NAME" background.border_color="$GROUP_BORDER"

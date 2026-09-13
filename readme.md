@@ -63,10 +63,8 @@ no edit to `install.sh` needed.
 
 Left: AeroSpace workspace pills (drawn only when occupied or focused, with
 per-app glyphs), binding-mode badge, front app.
-Right: now-playing, volume/battery/clock cluster, Focus chip.
+Right: now-playing, and a volume/battery/clock cluster.
 
-- **Focus chip** — left click toggles, right click opens Focus settings. Reads
-  live state from `~/Library/DoNotDisturb/DB`.
 - **Now playing** — Apple Music; click focuses its window *through AeroSpace*,
   so it switches to the right workspace. Hidden when Music isn't running.
 - **Hover** — clickable items (workspace pills, ☕, Focus, now-playing) take a
@@ -119,7 +117,7 @@ find out what it can do. Nothing is registered twice.
 ```sh
 dot                        # what can I do?
 dot scene open chill       dot theme set rose-pine-dawn
-dot scene close 3          dot focus toggle
+dot scene close 3          dot window fullscreen
 dot window split 0.6       dot doctor
 dot capabilities --json    # the whole surface, machine-readable
 ```

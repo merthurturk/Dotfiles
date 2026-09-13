@@ -33,9 +33,8 @@ the chords, so the palette teaches itself out of use.
 
 - **No screenshots in the readme.** For a project whose whole point is how it
   looks, that's the biggest adoption gap there is.
-- **Permissions are unavoidable and awkward.** Full Disk Access and
-  Accessibility need System Settings, twice, and no installer can do it.
-  `dot doctor` at least tells them exactly which and where.
+- **One permission is unavoidable.** AeroSpace needs Accessibility, and no
+  installer can grant it. `dot doctor` says exactly where to click.
 - **Berkeley Mono is commercial.** It falls back to Hack automatically, so
   nothing breaks — but the screenshots they'll see won't be quite what they get.
 

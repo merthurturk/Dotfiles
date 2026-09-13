@@ -21,7 +21,7 @@ just reads `bordersrc` and outlines whatever AeroSpace put on screen.
 |---|---|
 | **AeroSpace** | tiles windows, owns workspaces and keybindings |
 | **event-bridge** | a launchd agent translating AeroSpace events into bar triggers |
-| **SketchyBar** | draws the bar; its plugins are the only things with Full Disk Access |
+| **SketchyBar** | draws the bar |
 | **borders** | draws the outline around each window (JankyBorders) |
 | **dot** | the command surface everything else calls into |
 
@@ -62,7 +62,6 @@ Everything lives in `~/.local/state/aerospace/` — none of it is in the repo.
 
 | File | Written by | Read by |
 |---|---|---|
-| `focus` | `plugins/focus.sh` | `dot focus status`, the palette |
 | `scenes` | `scene.sh` | `dot scene list/close`, the workspace pills |
 | `theme` | `dot theme set` | `dot theme list`, `doctor` |
 | `log` | `logging.sh` | you, `doctor` |
@@ -71,12 +70,6 @@ Everything lives in `~/.local/state/aerospace/` — none of it is in the repo.
 | `fonts` | `fonts.sh` | every plugin that sets a font (a ~70ms probe, cached) |
 | `wallpaper/*.png` | `dot theme wallpaper` | macOS (the wallpaper store points at it) |
 | `wallpaper/Index.plist.before-dot` | `dot theme wallpaper`, once | `dot theme wallpaper --restore` |
-
-`focus` deserves a note: **only SketchyBar has Full Disk Access**, so it is the
-only process that can read the TCC-protected Focus database. It publishes what
-it reads to that file, and everything else — including anything running under
-AeroSpace, which has no FDA — reads the file instead. One process holds the
-permission; the rest consume its output.
 
 ## Symlinks
 

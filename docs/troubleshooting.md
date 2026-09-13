@@ -46,17 +46,6 @@ killall AeroSpace && sleep 2 && open -a AeroSpace
 That pulls all windows onto one workspace; redistribute afterwards. **Snapshot
 first**: `aerospace list-windows --all --format '%{workspace}|%{window-id}|%{app-name}'`.
 
-## The Focus chip says "Grant FDA"
-
-SketchyBar lacks Full Disk Access. Add the binary at `$(which sketchybar)` in
-System Settings → Privacy & Security → Full Disk Access, then
-`brew services restart sketchybar`.
-
-## Clicking the Focus chip does nothing
-
-No Shortcuts shortcut exists. `dot doctor` says which. Either a
-`Focus On`/`Focus Off` pair or a single `Toggle Focus`.
-
 ## A scene opens on the wrong workspace
 
 Shouldn't happen — `scene.sh` moves windows by id rather than trusting focus.

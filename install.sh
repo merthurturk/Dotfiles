@@ -133,26 +133,11 @@ Run bin/doctor.sh afterwards; it verifies every one of them.
    It prompts on first launch. System Settings > Privacy & Security >
    Accessibility > enable AeroSpace. Required for window management.
 
-2. Full Disk Access for sketchybar          (the Focus chip needs it)
-   System Settings > Privacy & Security > Full Disk Access > + > press
-   Cmd-Shift-G and paste the output of:  which sketchybar
-   Then: brew services restart sketchybar
-   Focus state lives in ~/Library/DoNotDisturb/DB, which is TCC-protected.
-   Without this the chip reads "Grant FDA" instead of your Focus state.
-
-3. Two Shortcuts, for the Focus toggle
-   macOS has no CLI for changing Focus; Shortcuts' "Set Focus" action is the
-   only supported route. In Shortcuts.app create, with one action each:
-       "Focus On"   ->  Set Focus / Turn Do Not Disturb On
-       "Focus Off"  ->  Set Focus / Turn Do Not Disturb Off
-   Names must match exactly. The bar reads the live state and picks which to
-   run, so no Toggle option is needed.
-
-4. Auto-hide the macOS menu bar
+2. Auto-hide the macOS menu bar
    System Settings > Control Center > "Automatically hide and show the menu
    bar" > Always. The bar draws in that space.
 
-5. Automation permission for Music and System Events
+3. Automation permission for Music and System Events
    Both prompt by themselves -- Music the first time the now-playing chip
    polls it, System Events the first time `dot theme set` switches the macOS
    light/dark appearance to match the theme. Allow both.
