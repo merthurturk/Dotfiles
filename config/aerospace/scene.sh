@@ -41,7 +41,7 @@ remember_scene() {
   local tmp="$STATE_FILE.tmp"
   [ -f "$STATE_FILE" ] && grep -v "^$ws	" "$STATE_FILE" > "$tmp" 2>/dev/null
   printf '%s\t%s\t%s\n' "$ws" "$name" "$ids" >> "$tmp"
-  mv "$tmp" "$STATE_FILE"
+  [ -f "$tmp" ] && mv "$tmp" "$STATE_FILE"
 }
 
 # Window ids a scene opened that are still open.
@@ -60,22 +60,22 @@ forget_scene() {     # <workspace>
   [ -f "$STATE_FILE" ] || return 0
   local tmp="$STATE_FILE.tmp"
   grep -v "^$1	" "$STATE_FILE" > "$tmp" 2>/dev/null || true
-  mv "$tmp" "$STATE_FILE"
+  [ -f "$tmp" ] && mv "$tmp" "$STATE_FILE"
 }
 
-# Drops entries whose workspace no longer has any windows. Without this,
-# reopening a scene (which summons its windows out of the old workspace) leaves
-# a stale row behind and the launcher offers a Close for an empty workspace.
+# Drops entries whose windows are all gone.
+#
+# Keyed on the scene's *own* windows, not on the workspace having anything at
+# all: an entry that outlives its windows is how `close` ends up destroying
+# whatever you have since put there.
 prune_scenes() {
   [ -f "$STATE_FILE" ] || return 0
-  local tmp="$STATE_FILE.tmp" ws name
+  local tmp="$STATE_FILE.tmp" ws name ids
   : > "$tmp"
-  while IFS=$'\t' read -r ws name; do
+  while IFS=$'\t' read -r ws name ids; do
     [ -n "${ws:-}" ] || continue
-    if [ -n "$($AEROSPACE list-windows --workspace "$ws" --format '%{window-id}')" ]; then
-      printf '%s\t%s\n' "$ws" "$name" >> "$tmp"
-    fi
-  done < "$STATE_FILE"
+    [ -n "$(scene_live_windows "$ws")" ] && printf '%s\t%s\t%s\n' "$ws" "$name" "$ids"
+  done < "$STATE_FILE" >> "$tmp"
   mv "$tmp" "$STATE_FILE"
 }
 
@@ -203,6 +203,18 @@ if [ -n "$PROFILE_NAME" ]; then
   ' "$LOCAL_STATE" 2>/dev/null | head -1)"
 fi
 PROFILE_DIR="${PROFILE_DIR:-Default}"
+
+# Already open? Go to it rather than building a second copy on another
+# workspace -- pressing the shortcut twice should land you on your scene, not
+# leave two of them lying around.
+prune_scenes
+EXISTING="$(awk -F'\t' -v s="$SCENE" '$2 == s { print $1; exit }' "$STATE_FILE" 2>/dev/null)"
+if [ -n "$EXISTING" ]; then
+  FIRST="$(scene_live_windows "$EXISTING" | awk '{print $1}')"
+  $AEROSPACE eval "workspace $EXISTING${FIRST:+; focus --window-id $FIRST}" >/dev/null 2>&1 \
+    || $AEROSPACE workspace "$EXISTING"
+  exit 0
+fi
 
 # A scene wants a clean workspace, not whatever is already open.
 WS="$($AEROSPACE list-workspaces --monitor all --empty | head -1)"

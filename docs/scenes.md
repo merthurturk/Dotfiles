@@ -50,6 +50,12 @@ previously focused window and the new windows are born on *that* workspace. The
 first version did switch first, and opened scenes onto whatever workspace you
 happened to be on.
 
+## Opening one that is already open
+
+`dot scene open` switches to the existing scene rather than building a second
+copy on another workspace. Pressing the shortcut twice should land you on your
+scene, not leave two of them around.
+
 ## The ledger
 
 `scene.sh` records what it opens in `~/.local/state/aerospace/scenes` as
@@ -65,7 +71,9 @@ and `close` only ever closes those. An earlier version recorded the workspace
 alone and pruned an entry only once that workspace was completely empty — so if
 the scene's own windows were gone but you had since put your own there, `close`
 destroyed them. That happened during testing. An entry is pruned when none of
-its windows are still open.
+its windows are still open — keyed on the scene's own windows, not on the
+workspace having anything at all, since an entry that outlives its windows is
+exactly how `close` ends up destroying whatever you put there next.
 
 `--force` still closes everything on the workspace, for when that is what you
 mean.
