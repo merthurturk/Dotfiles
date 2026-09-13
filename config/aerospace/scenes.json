@@ -5,8 +5,8 @@
     "badge": "PEACH",
     "ratio": 0.7,
     "windows": [
-      "chrome:https://www.youtube.com https://x.com https://www.instagram.com",
-      "chrome-app:https://app.contextengine.com/chat"
+      "chrome:https://www.youtube.com https://x.com",
+      "chrome-app:https://chat.openai.com"
     ]
   },
   "messaging": {

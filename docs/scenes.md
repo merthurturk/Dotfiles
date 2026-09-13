@@ -14,7 +14,7 @@ Definitions live in `config/aerospace/scenes.json` — **data, not code**:
   "icon": "󰅶", "label": "chill", "badge": "PEACH", "ratio": 0.70,
   "windows": [
     "chrome:https://www.youtube.com https://x.com https://www.instagram.com",
-    "chrome-app:https://app.contextengine.com/chat"
+    "chrome-app:https://chat.openai.com"
   ]
 }
 ```
@@ -73,9 +73,20 @@ a pale tint with deep text; focused flips to the deep colour as a fill.
 Why a tint rather than a solid: see
 [themes.md](themes.md#accents-must-be-darkened).
 
+## Your own scenes
+
+`scenes.json` holds examples and is version-controlled.
+`config/aerospace/scenes.local.json` is yours, gitignored, and **merged over**
+the shipped file — so a fork gets sensible defaults, and your own scenes survive
+a `git pull`. Same shape; only the keys you set are overridden:
+
+```json
+{ "chill": { "windows": ["chrome-app:https://your-chat.example.com"] } }
+```
+
 ## Adding one
 
-Add an entry to `scenes.json`. It reaches the palette immediately — `dot scene
+Add an entry to `scenes.json`, or to `scenes.local.json` to keep it to yourself. It reaches the palette immediately — `dot scene
 open --describe` enumerates the file. No code, and no second registration.
 
 To bind it to a key, add to `aerospace.toml`:

@@ -8,6 +8,7 @@ the four moving parts fit together and is the index for everything else.
 
 | Doc | For |
 |---|---|
+| [personas](docs/personas.md) | who this is for, and where it still falls short |
 | [architecture](docs/architecture.md) | how it fits together, state files, symlinks |
 | [capabilities](docs/capabilities.md) | the `dot` surface, descriptors, adding one |
 | [bar](docs/bar.md) | SketchyBar items, plugins, geometry, fonts, colour |

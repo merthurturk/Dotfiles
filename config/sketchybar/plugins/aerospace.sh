@@ -50,10 +50,21 @@ while IFS= read -r app; do
 "
 done < <(printf '%s\n' "$WINDOWS" | cut -d'|' -f2- | sort -u)
 
+# scenes.local.json overrides the shipped examples; see config/aerospace/scene.sh
+SCENES_LOCAL="$HOME/.config/aerospace/scenes.local.json"
 SCENE_DEFS=""
-[ -f "$SCENES_JSON" ] && SCENE_DEFS="$(jq -r '
-  to_entries[] | ["D", .key, (.value.icon // ""), (.value.label // .key),
-                  (.value.badge // "BLUE")] | @tsv' "$SCENES_JSON" 2>/dev/null)"
+if [ -f "$SCENES_JSON" ]; then
+  if [ -f "$SCENES_LOCAL" ]; then
+    SCENE_DEFS="$(jq -s -r '.[0] * .[1] |
+      to_entries[] | ["D", .key, (.value.icon // ""), (.value.label // .key),
+                      (.value.badge // "BLUE")] | @tsv' \
+      "$SCENES_JSON" "$SCENES_LOCAL" 2>/dev/null)"
+  else
+    SCENE_DEFS="$(jq -r '
+      to_entries[] | ["D", .key, (.value.icon // ""), (.value.label // .key),
+                      (.value.badge // "BLUE")] | @tsv' "$SCENES_JSON" 2>/dev/null)"
+  fi
+fi
 
 SCENE_STATE=""
 [ -f "$SCENES_STATE" ] && SCENE_STATE="$(sed 's/^/S\t/' "$SCENES_STATE")"

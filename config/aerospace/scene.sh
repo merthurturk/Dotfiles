@@ -68,6 +68,16 @@ scene_of() {         # <workspace> -> scene name, or empty
 
 SCENES_FILE="$DIR/scenes.json"
 
+# scenes.local.json is yours and gitignored; it is merged over the shipped
+# examples, so a fork gets sensible defaults and your own scenes survive a pull.
+if [ -f "$DIR/scenes.local.json" ]; then
+  _merged="$(mktemp)"
+  trap 'rm -f "$_merged"' EXIT
+  if jq -s '.[0] * .[1]' "$DIR/scenes.json" "$DIR/scenes.local.json" > "$_merged" 2>/dev/null; then
+    SCENES_FILE="$_merged"
+  fi
+fi
+
 if [ "${1:-}" = "--list" ]; then
   jq -r 'keys[]' "$SCENES_FILE" 2>/dev/null
   exit 0

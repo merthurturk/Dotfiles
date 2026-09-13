@@ -3,3 +3,6 @@ config/aerospace/bin/
 
 .idea/
 .DS_Store
+
+# Personal scene definitions, merged over the shipped examples.
+config/aerospace/scenes.local.json

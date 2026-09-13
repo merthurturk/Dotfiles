@@ -18,6 +18,11 @@ Ghostty has no IPC on macOS, so open panes are repainted with OSC escape
 sequences written to their ttys. Every colour that carries text is measured
 against 4.5:1 by `bin/check-themes.sh`.
 
+New here? [docs/personas.md](docs/personas.md) describes who this suits and
+what it does for them — including where it still asks too much.
+
+MIT licensed.
+
 ## Install on a new Mac
 
 ```sh
@@ -34,6 +39,7 @@ that remain. It is re-runnable: anything it would overwrite is moved to
 
 | Doc | For |
 |---|---|
+| [personas](docs/personas.md) | who this is for, and where it still falls short |
 | [architecture](docs/architecture.md) | how the parts fit together |
 | [capabilities](docs/capabilities.md) | the `dot` surface |
 | [bar](docs/bar.md) | SketchyBar items, geometry, fonts |
@@ -291,6 +297,19 @@ macOS's own window drop shadow is the one that stays. It can be read but not
 written from an unprivileged process — three different SkyLight calls all
 report success and change nothing. Removing it needs yabai's scripting
 addition, which requires partially disabling SIP.
+
+## Uninstalling
+
+```sh
+./uninstall.sh          # say what would happen
+./uninstall.sh --yes    # do it
+```
+
+Removes the symlinks, stops the services, unloads the agent and restores the
+one global macOS setting `install.sh` changed. Your backups in
+`~/.dotfiles-backup/` are left alone — restoring them automatically could
+overwrite something you have since changed. Permissions have to be revoked in
+System Settings; nothing can do that for you.
 
 ## Development
 
