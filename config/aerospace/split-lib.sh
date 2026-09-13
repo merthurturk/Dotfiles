@@ -15,9 +15,19 @@ _gap() {
 # Visible width of the focused monitor. The aerospace CLI exposes no geometry
 # placeholders, so this comes from NSScreen, matched by name.
 _focused_monitor_width() {
-  local mon
+  local mon cache
   mon="$($AEROSPACE list-monitors --focused --format '%{monitor-name}')"
-  osascript -l JavaScript -e '
+
+  # Asking AppKit costs ~180ms, and this sits on the visible path of every
+  # split. A monitor's width doesn't change while it's plugged in, so cache it
+  # per monitor; display_change clears the directory.
+  cache="${XDG_STATE_HOME:-$HOME/.local/state}/aerospace/monitor-width"
+  mkdir -p "$cache"
+  local file="$cache/${mon//[^A-Za-z0-9]/_}"
+  if [ -r "$file" ]; then cat "$file"; return 0; fi
+
+  local w
+  w="$(osascript -l JavaScript -e '
 function run(argv) {
   ObjC.import("AppKit");
   var want = argv[0], s = $.NSScreen.screens;
@@ -27,7 +37,8 @@ function run(argv) {
       return String(Math.round(sc.visibleFrame.size.width));
   }
   return String(Math.round($.NSScreen.mainScreen.visibleFrame.size.width));
-}' "$mon"
+}' "$mon")"
+  printf '%s' "$w" | tee "$file"
 }
 
 # find_app_window <app-name> [workspace]
@@ -64,10 +75,13 @@ snapshot_windows() { $AEROSPACE list-windows --all --format '%{window-id}' | sor
 #
 # Looks everywhere, not just the focused workspace: activating an app moves
 # focus, and the new window does not reliably land where you were.
+# The poll interval is the latency you feel: the window is typically ready well
+# before the next tick, so a quarter second was up to 250ms of dead time per
+# window. 20ms costs nothing measurable and reads as instant.
 wait_for_new_window() {
-  local before="$1" limit="${2:-60}" new="" i
+  local before="$1" limit="${2:-750}" new="" i
   for ((i = 0; i < limit; i++)); do
-    sleep 0.25
+    sleep 0.02
     new="$(comm -13 <(printf '%s\n' "$before") <(snapshot_windows) | head -1)"
     [ -n "$new" ] && break
   done
@@ -78,10 +92,12 @@ wait_for_new_window() {
 # Moves it there and asserts a tiled layout. `resize` refuses both floating
 # windows and an accordion root, and an app can open one floating without
 # warning; both calls are no-ops when already true.
+# One `eval` rather than three calls: each round-trip is ~40ms and each triggers
+# its own relayout, which is what makes a window visibly shuffle into place.
 place_window() {
-  $AEROSPACE move-node-to-workspace --window-id "$1" "$2" 2>/dev/null
-  $AEROSPACE layout tiling --window-id "$1" >/dev/null 2>&1 || true
-  $AEROSPACE layout tiles  --window-id "$1" >/dev/null 2>&1 || true
+  $AEROSPACE eval "move-node-to-workspace --window-id $1 $2; \
+                   layout tiling --window-id $1; \
+                   layout tiles --window-id $1" >/dev/null 2>&1 || true
 }
 
 # split_resize <window-id> <ratio>

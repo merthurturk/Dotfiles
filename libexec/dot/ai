@@ -62,9 +62,10 @@ NEW="$(wait_for_new_window "$BEFORE")"
 [ -n "$NEW" ] || { echo "dot ai: session window never appeared" >&2; exit 1; }
 
 # Sit it beside whatever you were looking at, so you can watch it work.
+# One round-trip for the move, the layout assertions and the switch.
 place_window "$NEW" "$ORIG_WS"
 $AEROSPACE workspace "$ORIG_WS" 2>/dev/null
-sleep 0.4
+sleep 0.1
 
 if [ -n "$ORIG_WID" ] && [ "$ORIG_WID" != "$NEW" ]; then
   split_resize "$ORIG_WID" 0.6 || true

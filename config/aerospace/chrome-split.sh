@@ -109,9 +109,10 @@ if [ -z "$NEW" ]; then
   exit 1
 fi
 
+# One round-trip for the move, the layout assertions and the switch.
 place_window "$NEW" "$TARGET_WS"
 $AEROSPACE workspace "$TARGET_WS" 2>/dev/null
-sleep 0.4
+sleep 0.1
 
 # Only split when it went beside something; on a fresh workspace it is alone.
 if [ "$NEW_WORKSPACE" -eq 0 ] && [ -n "$ORIG_WID" ] && [ "$ORIG_WID" != "$NEW" ]; then

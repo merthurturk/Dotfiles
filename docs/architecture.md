@@ -68,6 +68,7 @@ Everything lives in `~/.local/state/aerospace/` — none of it is in the repo.
 | `audit.log` | `dot` capabilities | you |
 | `picker-*.history` | the picker | the picker (frecency) |
 | `fonts` | `fonts.sh` | every plugin that sets a font (a ~70ms probe, cached) |
+| `monitor-width/` | `split-lib.sh` | split sizing (a ~180ms AppKit query, cached per monitor) |
 | `wallpaper/*.png` | `dot theme wallpaper` | macOS (the wallpaper store points at it) |
 | `wallpaper/Index.plist.before-dot` | `dot theme wallpaper`, once | `dot theme wallpaper --restore` |
 

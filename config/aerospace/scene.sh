@@ -211,10 +211,11 @@ if [ -z "$WS" ]; then
   exit 1
 fi
 
-# Note we do NOT switch to $WS first. `open -a` activates Chrome, which moves
-# focus; an empty workspace has no window to hold focus, so AeroSpace falls
-# back to the previously focused window and the new windows are born on *that*
-# workspace instead. So let them open wherever they land and move them by id.
+# Show the empty workspace *before* opening anything. The windows may still be
+# created on the workspace you were on -- an empty one cannot hold focus, so
+# AeroSpace falls back to the previously focused window -- but you are no longer
+# looking at it, so you never see them appear somewhere and fly away. They are
+# still moved by id rather than by trusting focus.
 
 
 # Opens one window spec and prints the resulting window id.
@@ -257,6 +258,10 @@ open_spec() {
   esac
 }
 
+$AEROSPACE workspace "$WS"
+
+# Place each window the moment it appears, in spec order, so the first ends up
+# leftmost and each simply pops into the workspace you are already watching.
 WIDS=()
 for spec in "${WINDOWS[@]}"; do
   wid="$(open_spec "$spec")"
@@ -264,22 +269,16 @@ for spec in "${WINDOWS[@]}"; do
     echo "scene: window for '$spec' never appeared" >&2
     exit 1
   fi
+  place_window "$wid" "$WS"
   WIDS+=("$wid")
 done
-
-# Move in order so the first spec ends up leftmost, then reveal the workspace.
-# Force tiling: an app may open its window floating, which would sit on top of
-# the layout instead of in it, and can't be resized.
-for wid in "${WIDS[@]}"; do
-  $AEROSPACE move-node-to-workspace --window-id "$wid" "$WS"
-  $AEROSPACE layout --window-id "$wid" tiling >/dev/null 2>&1 || true
-  $AEROSPACE layout --window-id "$wid" tiles  >/dev/null 2>&1 || true
-done
-$AEROSPACE workspace "$WS"
-sleep 0.4
 
 if [ "${#WIDS[@]}" -ge 2 ]; then
   split_resize "${WIDS[0]}" "$RATIO"
 fi
-$AEROSPACE focus --window-id "${WIDS[0]}" 2>/dev/null || true
+# Land on the scene. The switch at the top does not stick while the workspace is
+# still empty -- focus falls back to the previous window -- and a launching app
+# steals focus again as it comes up. Assert it once more now that the windows
+# are here and settled.
+$AEROSPACE eval "workspace $WS; focus --window-id ${WIDS[0]}" >/dev/null 2>&1 || true
 remember_scene "$WS" "$SCENE" "${WIDS[@]}"
