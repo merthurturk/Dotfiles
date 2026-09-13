@@ -88,8 +88,8 @@ clickable items — the ring is the whole affordance available.
 | `⌥⇧space` | Open the `chill` scene on an empty workspace (also left-click the ☕ button) |
 | `⌥⇧⌫` | Close the scene on the focused workspace (also right-click ☕) |
 
-`config/aerospace/split-with.sh "<App>" <ratio>` does the same for any app but
-summons an existing window instead of opening a new one. Bind more with:
+`dot window summon "<App>" <ratio>` does the same for any app, summoning an
+existing window instead of opening a new one. Bind more with:
 
 ```toml
 alt-shift-g = 'exec-and-forget $HOME/.config/aerospace/chrome-split.sh 0.6 "Relote"'
@@ -151,15 +151,8 @@ in this repo, with your request as the opening message. It has the full toolkit:
 it can read the configs, run `dot`, check what actually happened and iterate —
 which a one-shot planner can't.
 
-```sh
-dot ai --plan "turn on do not disturb and open my messaging scene"
-```
-
-The constrained path instead: Claude gets only the capability manifest, may emit
-only `dot` commands, and the plan is shown with destructive steps flagged before
-anything runs. Without a terminal it requires an explicit confirmation and
-**fails closed** on anything else. Use it when you want a deterministic action
-rather than a conversation.
+`dot capabilities --json` is the manifest an agent reads — every command, its
+arguments, whether it is destructive and how it is guarded.
 
 ## The command palette — ⌥space
 

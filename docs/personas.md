@@ -65,9 +65,9 @@ will look broken.
 
 - **It's all or nothing.** There's no "bar only" install; they get the
   keybindings too and have to prune. Their old config is backed up, not merged.
-- **Chrome is assumed** by `dot window split` — it's built around Chrome's
-  profile picker. Other browsers work through `split-with.sh <App> <ratio>`,
-  which has no profile concept.
+- **Chrome is assumed** by `dot window split`, which is built around Chrome's
+  profile picker. `dot window summon <App>` is the generic version for anything
+  else, but it summons an existing window rather than opening a new one.
 
 ---
 
@@ -83,7 +83,6 @@ can reason about.
 |---|---|
 | Let Claude see what's possible | `dot capabilities --json` — every command, its args, whether it's destructive |
 | Ask in plain language | `dot ai "…"` — a real Claude session, in the repo, beside their window |
-| Keep it on rails | `dot ai --plan` — manifest only, `dot` commands only, confirmed first |
 | Review what an agent did | `~/.local/state/aerospace/audit.log` |
 | Have Claude know the conventions | `CLAUDE.md` and `.claude/skills/dot/` load themselves |
 
@@ -100,8 +99,9 @@ declare a `verify` command, and the agent is told to run it.
 
 - **`dot ai` needs a Claude subscription** and the `claude` CLI. Nothing else
   in the repo does; this is the one part that isn't self-contained.
-- **A session has your normal permissions.** Only `--plan` is constrained. Say
-  so before someone assumes otherwise.
+- **A session has your normal permissions.** The manifest describes what is
+  destructive and how it is guarded, but nothing sandboxes the session itself.
+  Say so before someone assumes otherwise.
 
 ---
 

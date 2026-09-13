@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+#
+# Bring any app's window next to the focused one. `dot window split` is Chrome
+# only, because it is built around Chrome's profile picker; this is the generic
+# version for everything else.
+
+set -u
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+
+if [ "${1:-}" = "--describe" ]; then
+  jq -n --argjson apps "$(
+      "$AEROSPACE" list-apps 2>/dev/null | awk -F'|' '{gsub(/^ +| +$/,"",$3); print $3}' \
+        | grep -v '^$' | sort -u | jq -R -s 'split("\n") | map(select(length>0))')" '{
+    id: "window.summon",
+    summary: "Bring another app'"'"'s window beside this one",
+    args: [{name: "app", required: true, choices: $apps},
+           {name: "ratio", required: false, default: "0.6"}],
+    destructive: false,
+    verify: "dot window list --json",
+    note: "summons an existing window; dot window split opens a new Chrome one"
+  }'
+  exit 0
+fi
+
+audit "window summon ${*:-}"
+exec "$DOT_ROOT/config/aerospace/split-with.sh" "$@"
