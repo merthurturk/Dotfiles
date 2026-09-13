@@ -29,6 +29,13 @@ if [ "$SENDER" = "mouse.entered" ]; then
   exit 0
 fi
 
+# A split is an absolute width in points, so it is wrong on a different-sized
+# display. Restore each scene's declared ratio when the displays change; it
+# resizes hidden workspaces in place, so nothing visibly moves.
+if [ "$SENDER" = "display_change" ]; then
+  ( "$HOME/.local/bin/dot" window reflow >/dev/null 2>&1 & )
+fi
+
 FOCUSED="${FOCUSED_WORKSPACE:-$(aerospace list-workspaces --focused)}"
 SCENES_STATE="${XDG_STATE_HOME:-$HOME/.local/state}/aerospace/scenes"
 SCENES_JSON="$HOME/.config/aerospace/scenes.json"

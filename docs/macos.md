@@ -238,7 +238,10 @@ fullscreen when that is genuinely what you want (a video, say).
   both `tiling` and `tiles` first; each is a no-op when already true.
 - **`resize width` sets the node width**, which carries half the inner gap — the
   visible window lands `inner_gap/2` narrower than asked. `split-lib.sh` adds it
-  back.
+  back. It is also **absolute points**, so a split is wrong on a different-sized
+  display and nothing re-flows it; `dot window reflow` restores the ratio.
+- **`resize` works on a hidden workspace**, which is what lets reflow fix every
+  scene without switching to any of them.
 - **No geometry in the CLI.** `%{monitor-width}` doesn't parse; monitor size
   comes from `NSScreen`, matched by name.
 - **`[exec]` must be the last table in `aerospace.toml`** — a TOML table

@@ -46,6 +46,20 @@ killall AeroSpace && sleep 2 && open -a AeroSpace
 That pulls all windows onto one workspace; redistribute afterwards. **Snapshot
 first**: `aerospace list-windows --all --format '%{workspace}|%{window-id}|%{app-name}'`.
 
+## A scene's split is wrong after changing display
+
+`resize width` takes **absolute points**, so a split computed on a 1710pt laptop
+is wrong on a 2560pt monitor — typically the side window ends up a sliver.
+
+```sh
+dot window reflow
+```
+
+re-applies each open scene's declared ratio for the current display. It runs
+automatically on `display_change`, and resizes hidden workspaces in place, so
+nothing visibly moves. `⌥⇧\` (balance) also fixes the overlap but equalises the
+windows, throwing the ratio away.
+
 ## A scene opens on the wrong workspace
 
 Shouldn't happen — `scene.sh` moves windows by id rather than trusting focus.

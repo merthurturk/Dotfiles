@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+#
+# Re-apply every open scene's declared ratio.
+#
+# `resize width` takes absolute points, so a split computed on one display is
+# wrong on another -- move a 1710pt laptop layout to a 2560pt monitor and the
+# side window ends up a sliver. `balance-sizes` fixes the overlap but throws the
+# ratio away; this restores what the scene actually asked for.
+#
+# Only scene workspaces are touched. Their ratio is declared in scenes.json, so
+# re-applying it is honouring that declaration; a workspace you sized by hand is
+# left alone.
+
+set -u
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+# shellcheck source=/dev/null
+source "$DOT_ROOT/config/aerospace/split-lib.sh"
+
+if [ "${1:-}" = "--describe" ]; then
+  jq -n '{
+    id: "window.reflow",
+    summary: "Re-apply each open scene'"'"'s split for the current display",
+    args: [],
+    destructive: false,
+    verify: "dot window list --json",
+    instances: [{label: "Reflow scene splits", detail: "after changing display", args: []}]
+  }'
+  exit 0
+fi
+
+STATE_FILE="$STATE_DIR/scenes"
+[ -f "$STATE_FILE" ] || exit 0
+
+SCENES_JSON="$DOT_ROOT/config/aerospace/scenes.json"
+SCENES_LOCAL="$DOT_ROOT/config/aerospace/scenes.local.json"
+
+ratio_for() {
+  if [ -f "$SCENES_LOCAL" ]; then
+    jq -s -r --arg s "$1" '.[0] * .[1] | .[$s].ratio // 0.5' "$SCENES_JSON" "$SCENES_LOCAL" 2>/dev/null
+  else
+    jq -r --arg s "$1" '.[$s].ratio // 0.5' "$SCENES_JSON" 2>/dev/null
+  fi
+}
+
+touched=0
+
+# resize works on a hidden workspace, so this never switches anything -- which
+# is what makes it safe to run automatically when the display changes.
+while IFS=$'\t' read -r ws name ids; do
+  [ -n "${ws:-}" ] && [ -n "${ids:-}" ] || continue
+  main="${ids%%,*}"
+  split_resize "$main" "$(ratio_for "$name")" >/dev/null 2>&1 && touched=$((touched + 1))
+done < "$STATE_FILE"
+audit "window reflow ($touched scene(s))"
+[ "$touched" -gt 0 ] && echo "reflowed $touched scene(s)"
+exit 0
