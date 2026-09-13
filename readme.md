@@ -94,21 +94,14 @@ Passing a profile name skips the picker.
 ## Fonts
 
 All **text** is Berkeley Mono — terminal, bar labels, picker. Hack Nerd Font is
-used only for **icon glyphs** (battery, volume, clock, focus, music), because
-Berkeley Mono carries no Nerd Font glyphs.
+used only for **icon glyphs**, because Berkeley Mono carries none.
 
-Berkeley Mono is commercial and cannot ship here. Install it from your
-[Berkeley Graphics](https://berkeleygraphics.com/) account on a new machine;
-until then everything falls back to Hack Nerd Font automatically.
+Berkeley Mono is commercial and can't ship here; install it from your
+[Berkeley Graphics](https://berkeleygraphics.com/) account and everything falls
+back to Hack until you do.
 
-Two traps worth remembering:
-
-- Each Berkeley Mono weight installs as its **own family** with style
-  `Regular`. Asking sketchybar for `Berkeley Mono:Bold:13.0` silently falls back
-  to the system font — it looks fine but renders no Berkeley at all. Weight must
-  be chosen by family name: `Berkeley Mono Bold SemiCondensed:Regular`.
-- For the same reason Ghostty needs `font-family-bold` / `font-family-italic`
-  named explicitly, or it synthesises them.
+There are two traps in how its weights install — see
+[docs/bar.md](docs/bar.md#fonts).
 
 ## `dot` — one command for everything
 
@@ -205,87 +198,37 @@ bin/check-capabilities.sh    # every capability describes itself correctly
 
 ## Scenes
 
-`config/aerospace/scene.sh <scene>` opens a named window layout on the first
-**empty** workspace: a wide Chrome window with several tabs, plus a narrower one
-beside it. The side window uses Chrome's `--app` flag, which drops the tab strip
-and toolbar — what you want for a chat panel living in ~500pt.
+A scene is a named window layout opened onto a fresh workspace.
+
+```sh
+dot scene open chill      dot scene list
+dot scene close 3         dot scene close --force 5
+```
 
 | Scene | Windows |
 |---|---|
 | `chill` | YouTube / X / Instagram at 70%, Context Engine chat at 30% |
 | `messaging` | WhatsApp and Telegram, 50/50 |
 
-A scene is a list of window specs, left to right:
+Definitions are **data**, in `config/aerospace/scenes.json` — adding one needs
+no code, and it reaches the palette immediately. A workspace running a scene
+shows the scene's badge instead of app icons.
 
-A workspace running a scene shows the scene's **badge** — its glyph and name in
-its own colour — instead of the usual app icons, because "chill" says more than
-three browser glyphs do.
-
-| Field | Purpose |
-|---|---|
-| `icon` | Nerd Font glyph shown in the pill |
-| `label` | Short name for the bar; defaults to the scene's key |
-| `badge` | `PEACH`, `TEAL`, `MAUVE`, `BLUE` or `GREEN` from `colors.sh` |
-
-`label` matters more than it looks: the pill's width is almost entirely its text,
-so `messaging` → `chat` took that pill from 107pt to 73pt and brought it back
-into line with the app-icon pills.
-
-| Spec | Opens |
-|---|---|
-| `app:<App Name>` | summons that app's window, launching it only if needed |
-| `chrome:<urls…>` | a new Chrome window with those tabs |
-| `chrome-app:<url>` | a Chrome `--app` window: no tab strip, no toolbar |
-
-`RATIO` is the share of width given to the first window. Add a scene by adding
-a `case` branch, then optionally bind it:
-
-```toml
-alt-shift-period = 'exec-and-forget $HOME/.config/aerospace/scene.sh work'
-```
-
-A second argument picks the Chrome profile by display name, defaulting to
-`Default`.
-
-Closing:
-
-```sh
-scene.sh close            # the focused workspace
-scene.sh close 5          # a specific one
-scene.sh close --force 5  # one it didn't open
-```
-
-`scene.sh` records the workspaces it opens in
-`~/.local/state/aerospace/scenes` and **refuses to close anything else**,
-listing the open scenes instead. That guard matters: focus drifts on its own as
-apps activate, so a plain "close the focused workspace" will eventually fire at
-the wrong one.
+Window specs, the close ledger and why windows are moved by id rather than by
+switching workspace: [docs/scenes.md](docs/scenes.md).
 
 ## The picker
 
-`config/aerospace/src/picker.swift` compiles to a standalone chooser:
-auto-focused search field, fuzzy filter, arrows + enter, esc to cancel. Generic —
-reads lines on stdin, prints the choice on stdout:
+`config/aerospace/src/picker.swift` compiles to a standalone chooser —
+auto-focused search, fuzzy filter, arrows, enter. Generic: reads lines on stdin,
+prints the choice on stdout.
 
 ```sh
 ls ~/Projects | PICKER_PROMPT="Open project" ~/.config/aerospace/bin/picker
 ```
 
-Lines may be `label` or `label<TAB>detail`; the detail renders dimmed on the
-right and is matched against as well as the label:
-
-```sh
-printf 'api	go
-web	typescript
-' | ~/.config/aerospace/bin/picker
-```
-
-Rebuild after editing:
-
-```sh
-swiftc -O -o ~/.config/aerospace/bin/picker \
-          ~/.config/aerospace/src/picker.swift -framework AppKit
-```
+Detail columns, text-input mode, the alternate ⇧↵ action and frecency:
+[docs/picker.md](docs/picker.md).
 
 ## Updating the Brewfile
 
@@ -299,42 +242,31 @@ entries by purpose, so prefer editing it by hand.
 ## How the bar gets its updates
 
 A launchd agent, `config/aerospace/event-bridge.sh`, subscribes to AeroSpace's
-event stream and translates it into SketchyBar triggers. It replaced ~40
-`exec-and-forget sketchybar --trigger` calls that previously had to be repeated
-on every binding, and it picks up `window-detected`, which no binding could
-provide.
+event stream and turns it into SketchyBar triggers, replacing ~40 per-binding
+`--trigger` calls. AeroSpace emits nothing when a window *closes*, so
+`spaces_watcher` also polls every 5s as a backstop.
 
-AeroSpace emits no event for a window *closing* or for one moved by id from a
-script, so `spaces_watcher` also polls every 5s as a backstop.
-
-Scripts run by `exec-and-forget` or a `click_script` have their stderr thrown
-away, so anything user-facing sources `config/aerospace/logging.sh`, which
-diverts stderr to `~/.local/state/aerospace/log` — but only when no terminal is
-attached, so running by hand still shows your errors.
+Full picture, including which process writes which state file:
+[docs/architecture.md](docs/architecture.md).
 
 ## Themes
 
 ```sh
 dot theme list
-dot theme set rose-pine-dawn
+dot theme set opal-fire
 ```
 
-A theme is a directory under `themes/` holding `colors.sh` (the bar palette),
-`ghostty.conf` (the terminal) and `meta.json`. `config/sketchybar/colors.sh` and
-`config/ghostty/theme.conf` are symlinks into the active one, so the bar and the
-terminal can't drift apart.
+Five themes — **Opal White**, **Opal Fire** and **Rosé Pine Dawn** light,
+**Opal Black** and **Synthwave** dark. A theme is a directory under `themes/`
+holding `colors.sh`, `ghostty.conf` and `meta.json`; the bar's palette and the
+terminal's theme are symlinks into the active one, so they can't drift apart.
 
-Both shipped themes are light. Accents are **darkened from their upstream
-palettes** until white text on them clears 4.5:1 — Latte's peach measures 2.64:1
-as a fill, and Rosé Pine Dawn's gold 2.05:1. Beautiful for syntax highlighting,
-unusable for a chip with a label on it.
+Open terminal panes repaint **immediately** — `dot theme set` writes OSC escape
+sequences to each pane rather than waiting for a config reload, which Ghostty
+has no CLI for.
 
-Ghostty picks up a theme change on its next config reload (⌘⇧, in a terminal).
-
-The desktop picture and the screen saver follow too. There is no image file in
-the repo: one is rendered from the theme's own `colors.sh` at your display's
-pixel size — a light wash of the theme's accents, quiet in the middle where the
-windows go — and set as both the wallpaper and the screen saver.
+The desktop picture and screen saver follow too, rendered from the theme's own
+`colors.sh` at your display's pixel size, so there's no image in the repo:
 
 ```sh
 dot theme wallpaper            # re-render for the current theme
@@ -342,8 +274,10 @@ dot theme wallpaper --show     # what macOS actually has set
 dot theme wallpaper --restore  # back to what you had before
 ```
 
-macOS 14 moved both into one store and left the screen saver half with no
-public API, so the first run copies that store aside before editing it.
+Accents are darkened from their upstream palettes until text on them clears
+4.5:1, and `bin/check-themes.sh` enforces that in the pre-commit hook. Why that
+is necessary, and how the wallpaper store is edited safely:
+[docs/themes.md](docs/themes.md).
 
 ### Outlines, not shadows
 
