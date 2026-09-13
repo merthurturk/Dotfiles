@@ -60,9 +60,15 @@ focused workspace" behind a confirmation dialog, and closed the wrong window
 during testing, because focus drifts on its own as apps activate. A dialog is
 too easy to click through; a ledger is not. `--force` exists for the rest.
 
-Entries whose workspace has no windows are pruned on read, so reopening a scene
-(which summons its windows out of the old workspace) doesn't leave a phantom
-Close in the palette.
+The ledger records **which windows** the scene opened, not just the workspace,
+and `close` only ever closes those. An earlier version recorded the workspace
+alone and pruned an entry only once that workspace was completely empty — so if
+the scene's own windows were gone but you had since put your own there, `close`
+destroyed them. That happened during testing. An entry is pruned when none of
+its windows are still open.
+
+`--force` still closes everything on the workspace, for when that is what you
+mean.
 
 ## Badges
 

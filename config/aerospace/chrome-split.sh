@@ -99,28 +99,17 @@ else
   TARGET_WS="$ORIG_WS"
 fi
 
-BEFORE="$($AEROSPACE list-windows --all --format '%{window-id}' | sort)"
+BEFORE="$(snapshot_windows)"
 open -na "Google Chrome" --args --profile-directory="$PROFILE_DIR" --new-window
 
-# Look for it anywhere, not just on the focused workspace -- it may not land
-# there, and focus may have moved by now anyway.
-NEW=""
-for _i in $(seq 1 60); do
-  sleep 0.25
-  NEW="$(comm -13 <(printf '%s\n' "$BEFORE") \
-                  <($AEROSPACE list-windows --all --format '%{window-id}' | sort) \
-         | head -1)"
-  [ -n "$NEW" ] && break
-done
+NEW="$(wait_for_new_window "$BEFORE")"
 
 if [ -z "$NEW" ]; then
   echo "chrome-split: new window never appeared" >&2
   exit 1
 fi
 
-$AEROSPACE move-node-to-workspace --window-id "$NEW" "$TARGET_WS" 2>/dev/null
-$AEROSPACE layout tiling --window-id "$NEW" >/dev/null 2>&1 || true
-$AEROSPACE layout tiles  --window-id "$NEW" >/dev/null 2>&1 || true
+place_window "$NEW" "$TARGET_WS"
 $AEROSPACE workspace "$TARGET_WS" 2>/dev/null
 sleep 0.4
 

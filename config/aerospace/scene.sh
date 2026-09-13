@@ -26,13 +26,34 @@ STATE_FILE="$STATE_DIR/scenes"   # "<workspace>\t<scene name>" per line
 # Remembering which workspaces this script opened is what makes closing safe:
 # a scene workspace can be emptied without a prompt, anything else can't.
 
-remember_scene() {   # <workspace> <scene>
+# remember_scene <workspace> <scene> <window-id>...
+#
+# The window ids matter. An earlier version recorded only the workspace, and
+# pruned an entry only once that workspace was completely empty -- so if the
+# scene's own windows were gone but you had since put your own there, the entry
+# survived and `close` destroyed them. That happened. Recording the ids means
+# close only ever touches windows the scene actually opened.
+remember_scene() {
   mkdir -p "$STATE_DIR"
   prune_scenes
+  local ws="$1" name="$2"; shift 2
+  local ids; ids="$(printf '%s,' "$@")"; ids="${ids%,}"
   local tmp="$STATE_FILE.tmp"
-  [ -f "$STATE_FILE" ] && grep -v "^$1	" "$STATE_FILE" > "$tmp" 2>/dev/null
-  printf '%s\t%s\n' "$1" "$2" >> "$tmp"
+  [ -f "$STATE_FILE" ] && grep -v "^$ws	" "$STATE_FILE" > "$tmp" 2>/dev/null
+  printf '%s\t%s\t%s\n' "$ws" "$name" "$ids" >> "$tmp"
   mv "$tmp" "$STATE_FILE"
+}
+
+# Window ids a scene opened that are still open.
+scene_live_windows() {   # <workspace>
+  local ws="$1" name ids alive="" id
+  IFS=$'\t' read -r _ name ids < <(awk -F'\t' -v w="$ws" '$1==w{print;exit}' "$STATE_FILE" 2>/dev/null)
+  [ -n "${ids:-}" ] || return 0
+  local existing; existing="$($AEROSPACE list-windows --all --format '%{window-id}')"
+  for id in ${ids//,/ }; do
+    printf '%s\n' "$existing" | grep -qx "$id" && alive="$alive $id"
+  done
+  printf '%s' "${alive# }"
 }
 
 forget_scene() {     # <workspace>
@@ -127,7 +148,12 @@ if [ "${1:-}" = "close" ]; then
     exit 1
   fi
 
-  WIDS="$($AEROSPACE list-windows --workspace "$WS" --format '%{window-id}')"
+  if [ "$FORCE" -eq 1 ]; then
+    WIDS="$($AEROSPACE list-windows --workspace "$WS" --format '%{window-id}')"
+  else
+    # Only the windows this scene opened, never whatever else has arrived since.
+    WIDS="$(scene_live_windows "$WS" | tr ' ' '\n')"
+  fi
   if [ -z "$WIDS" ]; then
     forget_scene "$WS"
     echo "scene: workspace $WS is already empty" >&2
@@ -190,20 +216,6 @@ fi
 # back to the previously focused window and the new windows are born on *that*
 # workspace instead. So let them open wherever they land and move them by id.
 
-wait_new_window() {   # <sorted list of window ids that existed before>
-  local before="$1" new=""
-  # shellcheck disable=SC2034  # counted loop; the index is deliberately unused
-  for _i in $(seq 1 60); do
-    sleep 0.25
-    new="$(comm -13 <(printf '%s\n' "$before") \
-                    <($AEROSPACE list-windows --all --format '%{window-id}' | sort) \
-           | head -1)"
-    [ -n "$new" ] && break
-  done
-  printf '%s' "$new"
-}
-
-snapshot() { $AEROSPACE list-windows --all --format '%{window-id}' | sort; }
 
 # Opens one window spec and prints the resulting window id.
 open_spec() {
@@ -221,22 +233,22 @@ open_spec() {
         printf '%s' "$existing"
         return 0
       fi
-      before="$(snapshot)"
+      before="$(snapshot_windows)"
       open -a "$rest"
-      wait_new_window "$before"
+      wait_for_new_window "$before"
       ;;
     chrome)
-      before="$(snapshot)"
+      before="$(snapshot_windows)"
       # $rest is deliberately unquoted: several URLs become several tabs.
       open -na "Google Chrome" --args --profile-directory="$PROFILE_DIR" \
            --new-window $rest
-      wait_new_window "$before"
+      wait_for_new_window "$before"
       ;;
     chrome-app)
-      before="$(snapshot)"
+      before="$(snapshot_windows)"
       open -na "Google Chrome" --args --profile-directory="$PROFILE_DIR" \
            --app="$rest"
-      wait_new_window "$before"
+      wait_for_new_window "$before"
       ;;
     *)
       echo "scene: unknown window spec '$spec'" >&2
@@ -270,4 +282,4 @@ if [ "${#WIDS[@]}" -ge 2 ]; then
   split_resize "${WIDS[0]}" "$RATIO"
 fi
 $AEROSPACE focus --window-id "${WIDS[0]}" 2>/dev/null || true
-remember_scene "$WS" "$SCENE"
+remember_scene "$WS" "$SCENE" "${WIDS[@]}"

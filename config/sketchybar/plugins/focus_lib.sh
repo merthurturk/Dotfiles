@@ -14,14 +14,6 @@ FOCUS_MODES="$DND_DB/ModeConfigurations.json"
 
 focus_db_readable() { [ -r "$FOCUS_ASSERTIONS" ] && [ -r "$FOCUS_MODES" ]; }
 
-# "<mode-id>\t<name>" per configured Focus, sorted by display name.
-focus_list_modes() {
-  jq -r '
-    .data[]?.modeConfigurations // {}
-    | to_entries[]
-    | [.key, (.value.mode.name // .key)] | @tsv
-  ' "$FOCUS_MODES" 2>/dev/null | sort -t$'\t' -k2,2
-}
 
 # Active mode identifier, or nothing when Focus is off.
 # storeInvalidationRecords holds *ended* assertions and must be ignored.

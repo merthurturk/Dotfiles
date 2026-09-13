@@ -69,26 +69,17 @@ if [ "$PLAN_MODE" -eq 0 ]; then
   # asking when invoked directly from a shell.
   ORIG_WID="${DOT_ORIG_WID:-$($AEROSPACE list-windows --focused --format '%{window-id}')}"
   ORIG_WS="${DOT_ORIG_WS:-$($AEROSPACE list-workspaces --focused)}"
-  BEFORE="$($AEROSPACE list-windows --all --format '%{window-id}' | sort)"
+  BEFORE="$(snapshot_windows)"
 
   # printf %q so a request with quotes or spaces survives the shell.
   "$GHOSTTY" --working-directory="$DOT_ROOT" --title="dot ai" \
              -e /bin/bash -lc "claude $(printf '%q' "$REQUEST")" &
 
-  NEW=""
-  for _i in $(seq 1 60); do
-    sleep 0.25
-    NEW="$(comm -13 <(printf '%s\n' "$BEFORE") \
-                    <($AEROSPACE list-windows --all --format '%{window-id}' | sort) \
-           | head -1)"
-    [ -n "$NEW" ] && break
-  done
+  NEW="$(wait_for_new_window "$BEFORE")"
   [ -n "$NEW" ] || { echo "dot ai: session window never appeared" >&2; exit 1; }
 
   # Sit it beside whatever you were looking at, so you can watch it work.
-  $AEROSPACE move-node-to-workspace --window-id "$NEW" "$ORIG_WS" 2>/dev/null
-  $AEROSPACE layout tiling --window-id "$NEW" >/dev/null 2>&1 || true
-  $AEROSPACE layout tiles  --window-id "$NEW" >/dev/null 2>&1 || true
+  place_window "$NEW" "$ORIG_WS"
   $AEROSPACE workspace "$ORIG_WS" 2>/dev/null
   sleep 0.4
 

@@ -49,6 +49,41 @@ find_app_window() {
     '
 }
 
+# --- opening and placing a window ------------------------------------------
+#
+# scene.sh, chrome-split.sh and `dot ai` all do the same three things: note
+# which windows exist, launch something, then put the window that appears where
+# it belongs. Each had its own copy, and the focus race in it was fixed three
+# separate times. One copy now.
+
+# Snapshot of every window id, sorted, for wait_for_new_window to diff against.
+snapshot_windows() { $AEROSPACE list-windows --all --format '%{window-id}' | sort; }
+
+# wait_for_new_window <snapshot> [timeout-quarter-seconds]
+# Prints the id of the first window that appeared since the snapshot.
+#
+# Looks everywhere, not just the focused workspace: activating an app moves
+# focus, and the new window does not reliably land where you were.
+wait_for_new_window() {
+  local before="$1" limit="${2:-60}" new="" i
+  for ((i = 0; i < limit; i++)); do
+    sleep 0.25
+    new="$(comm -13 <(printf '%s\n' "$before") <(snapshot_windows) | head -1)"
+    [ -n "$new" ] && break
+  done
+  printf '%s' "$new"
+}
+
+# place_window <window-id> <workspace>
+# Moves it there and asserts a tiled layout. `resize` refuses both floating
+# windows and an accordion root, and an app can open one floating without
+# warning; both calls are no-ops when already true.
+place_window() {
+  $AEROSPACE move-node-to-workspace --window-id "$1" "$2" 2>/dev/null
+  $AEROSPACE layout tiling --window-id "$1" >/dev/null 2>&1 || true
+  $AEROSPACE layout tiles  --window-id "$1" >/dev/null 2>&1 || true
+}
+
 # split_resize <window-id> <ratio>
 # Sizes that window to <ratio> of the two-tile area; its sibling takes the rest.
 split_resize() {
