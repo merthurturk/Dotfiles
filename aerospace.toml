@@ -246,7 +246,10 @@ gaps.outer.right =      10
     alt-shift-k = ['join-with up', 'mode main']
     alt-shift-l = ['join-with right', 'mode main']
 
-# Must be the last table in the file: a TOML table captures every key after it.
+# Must be the last table carrying bare keys: a TOML table captures every key
+# after it, so `inherit-env-vars` and `PATH` below would be swallowed by
+# anything opened above them. A later table *header* is fine and ends this one
+# -- which is where `dot window pin` appends its [[on-window-detected]] rules.
 # GUI apps launched at login inherit a bare launchd PATH, so Homebrew's bin
 # directory has to be added explicitly for bindings to find `sketchybar`.
 # Covers both Apple Silicon (/opt/homebrew) and Intel (/usr/local) prefixes.

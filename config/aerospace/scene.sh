@@ -88,14 +88,20 @@ stage_previous_session() {
   : > "$STATE_FILE"
 }
 
-# Drops entries whose windows are all gone, and collapses any workspace that
-# somehow has two lines -- the last one wins.
+# Drops entries whose windows are all gone.
 #
 # These three functions used to share one temp path, $STATE_FILE.tmp. Nothing
 # here runs concurrently on purpose, but remember_scene calls prune_scenes and
 # both then wrote and moved the same file; a failed mv left the ledger with a
 # duplicated line and "mv: scenes.tmp: No such file or directory" in the log.
 # mktemp each, so they cannot collide however they end up nested.
+#
+# That fix is also why there is no dedupe pass here any more. There was one,
+# and `for (w in line)` walks an awk hash in unspecified order -- so every
+# prune quietly reshuffled the ledger, and with it the order of `dot scene
+# list`, of what `dot scene restore` replays, and of which workspace a
+# first-match lookup calls "the" one for a scene. It was guarding against a
+# duplicate that mktemp had already made impossible.
 #
 # Keyed on the scene's *own* windows, not on the workspace having anything at
 # all: an entry that outlives its windows is how `close` ends up destroying
@@ -107,8 +113,7 @@ prune_scenes() {
   while IFS=$'\t' read -r ws name ids; do
     [ -n "${ws:-}" ] || continue
     [ -n "$(scene_live_windows "$ws")" ] && printf '%s\t%s\t%s\n' "$ws" "$name" "$ids"
-  done < "$STATE_FILE" \
-    | awk -F'\t' '{ line[$1] = $0 } END { for (w in line) print line[w] }' > "$tmp"
+  done < "$STATE_FILE" > "$tmp"
   mv "$tmp" "$STATE_FILE"
 }
 
@@ -178,8 +183,17 @@ if [ "${1:-}" = "--describe" ]; then
   exit 0
 fi
 
+# A read, and deliberately not a pruning one any more.
+#
+# prune_scenes asks AeroSpace which windows still exist -- once per ledger row
+# -- and then rewrites the file. That made the palette's slowest descriptor a
+# disk write and an IPC storm, on the one path where latency is felt. Every
+# writer already prunes (remember_scene calls it, close calls forget_scene), so
+# the only thing this drops is garbage-collecting a scene whose windows you
+# closed by hand, and the cost of that is a stale row in the launcher until the
+# next scene command -- at which point closing it says "already empty" and
+# forgets it, which was always the handled path.
 if [ "${1:-}" = "--open-scenes" ]; then
-  prune_scenes
   [ -f "$STATE_FILE" ] && cat "$STATE_FILE"
   exit 0
 fi

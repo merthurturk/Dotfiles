@@ -52,32 +52,32 @@ VISIBLE="$($AEROSPACE list-workspaces --monitor all --visible 2>/dev/null | past
 set -- --format '%{window-id}|%{workspace}|%{app-name}|%{monitor-name}'
 if [ -n "$WS" ]; then set -- --workspace "$WS" "$@"; else set -- --monitor all "$@"; fi
 
-ROWS="$(
-  $AEROSPACE list-windows "$@" 2>/dev/null | sed 's/^/A|/'
-  "$GEOMETRY" | awk -F'\t' '{ print "G|" $1 "|" $2 "|" $3 "|" $4 "|" $5 "|" $7 }'
-)"
+# The two lists go into jq as two inputs, not as one tagged blob that jq then
+# has to un-tag. AeroSpace first, so only windows it manages are reported --
+# the raw CG list is full of JankyBorders overlays, autofill popovers and
+# menu-bar furniture.
+GEO="$("$GEOMETRY" | jq -R -s 'split("\n") | map(select(length > 0) | split("\t"))
+  | map({key: .[0], value: {x: (.[1]|tonumber), y: (.[2]|tonumber),
+                            width: (.[3]|tonumber), height: (.[4]|tonumber),
+                            title: (.[6] // "")}}) | from_entries')"
 
-JSON="$(printf '%s\n' "$ROWS" | jq -R -s --arg visible "$VISIBLE" '
+JSON="$($AEROSPACE list-windows "$@" 2>/dev/null | jq -R -s \
+  --argjson geo "${GEO:-{\}}" --arg visible "$VISIBLE" '
   ($visible | split(",")) as $vis
   | split("\n") | map(select(length > 0) | split("|"))
-  | (map(select(.[0] == "G")) | map({key: .[1], value: {x: (.[2]|tonumber), y: (.[3]|tonumber),
-                                                        width: (.[4]|tonumber), height: (.[5]|tonumber),
-                                                        title: (.[6] // "")}}) | from_entries) as $geo
-  | map(select(.[0] == "A"))
-  | map({id: .[1], workspace: .[2], app: .[3], monitor: .[4],
-         visible: (.[2] as $w | $vis | index($w) != null)})
-  | map(. + ($geo[.id] // {}))')"
+  | map({id: .[0], workspace: .[1], app: .[2], monitor: .[3],
+         visible: (.[1] as $w | $vis | index($w) != null)}
+        + ($geo[.[0]] // {}))')"
 
 if [ "$AS_JSON" -eq 1 ]; then
   printf '%s\n' "$JSON"
   exit 0
 fi
 
+# The header is a row like any other, so the format string exists once.
 printf '%s' "$JSON" | jq -r '
-  .[] | [ .id, .workspace, (if .visible then " " else "·" end),
-          (.x|tostring), (.y|tostring), (.width|tostring), (.height|tostring),
-          .app ] | @tsv' \
-  | awk -F'\t' 'BEGIN { printf "%-8s %-3s %s %6s %6s %7s %7s  %s\n",
-                        "id","ws","","x","y","width","height","app" }
-                { printf "%-8s %-3s %s %6s %6s %7s %7s  %s\n", $1,$2,$3,$4,$5,$6,$7,$8 }'
+  ["id","ws","","x","y","width","height","app"],
+  (.[] | [.id, .workspace, (if .visible then " " else "·" end),
+          .x, .y, .width, .height, .app]) | @tsv' \
+  | awk -F'\t' '{ printf "%-8s %-3s %s %6s %6s %7s %7s  %s\n", $1,$2,$3,$4,$5,$6,$7,$8 }'
 echo "  (· = on a hidden workspace: parked, not laid out)"

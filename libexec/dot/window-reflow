@@ -46,9 +46,10 @@ fi
 # scene.sh owns the scenes.json + scenes.local.json merge, tombstones included.
 # This file used to carry its own copy of it, which is how a third one comes to
 # disagree with the other two.
+DEFS=""
 ratio_for() {
-  "$DOT_ROOT/config/aerospace/scene.sh" --scenes-json 2>/dev/null \
-    | jq -r --arg s "$1" '.[$s].ratio // 0.5'
+  [ -n "$DEFS" ] || DEFS="$(scenes_json)"
+  printf '%s' "$DEFS" | jq -r --arg s "$1" '.[$s].ratio // 0.5'
 }
 
 # reflow_ws <workspace> -> 0 if it was resized
@@ -62,33 +63,34 @@ reflow_ws() {
 
 [ -f "$STATE_FILE" ] || exit 0
 VISIBLE="$($AEROSPACE list-workspaces --monitor all --visible 2>/dev/null)"
+NL=$'\n'
 
 # --now: called by the bar when you arrive on a workspace that was queued.
 if [ "${1:-}" = "--now" ]; then
   ws="${2:-}"
   [ -n "$ws" ] || { echo "usage: dot window reflow --now <workspace>" >&2; exit 1; }
   grep -qx "$ws" "$PENDING" 2>/dev/null || exit 0
-  printf '%s\n' "$VISIBLE" | grep -qx "$ws" || exit 0
+  case "$NL$VISIBLE$NL" in *"$NL$ws$NL"*) ;; *) exit 0 ;; esac
   reflow_ws "$ws" && audit "window reflow --now $ws"
   # Off the queue either way: a scene that cannot be resized now will not be
   # resizable the next time you arrive either, and retrying forever is worse
   # than not trying.
-  grep -vx "$ws" "$PENDING" > "$PENDING.tmp" 2>/dev/null; mv "$PENDING.tmp" "$PENDING"
+  rest="$(mktemp)"; grep -vx "$ws" "$PENDING" > "$rest" 2>/dev/null; mv "$rest" "$PENDING"
   exit 0
 fi
 
 now=0; queued=0
-: > "$PENDING.new"
+queue="$(mktemp)"
 while IFS=$'\t' read -r ws name ids; do
   [ -n "${ws:-}" ] && [ -n "${ids:-}" ] || continue
-  if printf '%s\n' "$VISIBLE" | grep -qx "$ws"; then
-    reflow_ws "$ws" && now=$((now + 1))
-  else
-    printf '%s\n' "$ws" >> "$PENDING.new"
-    queued=$((queued + 1))
-  fi
+  case "$NL$VISIBLE$NL" in *"$NL$ws$NL"*)
+    reflow_ws "$ws" && now=$((now + 1)) ;;
+  *)
+    printf '%s\n' "$ws" >> "$queue"
+    queued=$((queued + 1)) ;;
+  esac
 done < "$STATE_FILE"
-mv "$PENDING.new" "$PENDING"
+mv "$queue" "$PENDING"
 
 audit "window reflow ($now now, $queued queued)"
 [ $((now + queued)) -gt 0 ] \

@@ -13,17 +13,19 @@
 set -u
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
-SCENE_SH="$DOT_ROOT/config/aerospace/scene.sh"
-LEDGER="$STATE_DIR/scenes"
+NL=$'\n'
 
 # "<workspace>\t<scene>" for each scene of the previous session that is still
 # defined and is not already open. scene.sh does the staging: it owns the
 # ledger, and the move has to happen before anything prunes it.
 pending() {
+  # The definitions cannot change mid-loop, so read them once. This used to
+  # fork scene.sh and jq per row -- on the palette path, on the first ⌥space
+  # after a reboot, which is exactly when there is most to restore.
+  local defined; defined="$(scenes_json | jq -r 'keys[]')"
   "$SCENE_SH" --previous-session 2>/dev/null | while IFS=$'\t' read -r ws name; do
     [ -n "${name:-}" ] || continue
-    "$SCENE_SH" --scenes-json 2>/dev/null | jq -e --arg n "$name" 'has($n)' >/dev/null 2>&1 \
-      || continue
+    case "$NL$defined$NL" in *"$NL$name$NL"*) ;; *) continue ;; esac
     awk -F'\t' -v s="$name" '$2 == s { found = 1 } END { exit !found }' "$LEDGER" 2>/dev/null \
       && continue
     printf '%s\t%s\n' "$ws" "$name"

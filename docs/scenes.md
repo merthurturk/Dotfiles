@@ -155,9 +155,7 @@ you have open at the time. So the split is:
   default. Set it from the launcher under *Edit a scene… → Quit apps on close*,
   or with `dot scene edit messaging --quit`.
 - The **decision about each app** is made by looking. An app is quit only if
-  closing the scene left it with **no windows at all**, checked against both
-  AeroSpace's list and `CGWindowListCopyWindowInfo` — either one saying "still
-  open" leaves the app alone.
+  closing the scene left it with **no windows at all**, according to AeroSpace.
 
 That gets both cases right without being told, and it stays right on the day
 you happen to have a second WhatsApp window somewhere. Verified: a scene with
@@ -171,8 +169,7 @@ Privacy & Security > Automation*. Triggered from a keybinding there may be no
 prompt to answer and it simply fails; either way the windows still close and
 the log says which app was left running.
 
-**The check is AeroSpace's window list, and only AeroSpace's.** An earlier
-version cross-checked `CGWindowListCopyWindowInfo` on the theory that two views
+**Only AeroSpace's window list, deliberately.** An earlier version cross-checked `CGWindowListCopyWindowInfo` on the theory that two views
 are safer than one. They are not, when one of them is wrong: CG retains entries
 for windows that have already closed. With WhatsApp and Telegram running with
 no windows at all it still reported an 840×1051 window for each — and a Ghostty

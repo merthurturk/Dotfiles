@@ -13,7 +13,6 @@ set -u
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
 HIST="$STATE_DIR/scene-focus"
-LEDGER="$STATE_DIR/scenes"
 
 # The most recently focused scene workspace that isn't the one you are on, and
 # is still running a scene. A closed scene leaves its entry behind in the
@@ -31,7 +30,7 @@ target() {
 }
 
 if [ "${1:-}" = "--describe" ]; then
-  cur="${DOT_ORIG_WS:-$($AEROSPACE list-workspaces --focused 2>/dev/null)}"
+  cur="$(orig_ws)"
   ws="$(target "$cur")" || ws=""
   name="$(awk -F'\t' -v w="$ws" '$1 == w { print $2; exit }' "$LEDGER" 2>/dev/null)"
   jq -n --arg ws "$ws" --arg name "$name" \
@@ -49,7 +48,7 @@ if [ "${1:-}" = "--describe" ]; then
   exit 0
 fi
 
-CUR="${DOT_ORIG_WS:-$($AEROSPACE list-workspaces --focused)}"
+CUR="$(orig_ws)"
 WS="$(target "$CUR")" || {
   echo "scene last: no other scene has been open" >&2
   exit 1

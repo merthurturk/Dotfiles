@@ -96,8 +96,11 @@ esac
 # them out -- so `dot window reflow` queues those and this is where they land.
 # Arriving is the first moment the geometry is real. Costs nothing when the
 # queue is empty, which is almost always.
+# Not on display_change: that branch above already launched a full reflow,
+# which covers every visible workspace. Draining here too would read a queue
+# the other process is still rewriting and race it on the same window.
 PENDING_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/aerospace/reflow-pending"
-if [ -s "$PENDING_FILE" ]; then
+if [ "$SENDER" != "display_change" ] && [ -s "$PENDING_FILE" ]; then
   pending="$(<"$PENDING_FILE")"
   case "$NL$pending$NL" in
     *"$NL$FOCUSED$NL"*) ( "$HOME/.local/bin/dot" window reflow --now "$FOCUSED" \

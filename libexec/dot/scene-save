@@ -17,8 +17,6 @@
 set -u
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
-SCENES_LOCAL="$DOT_ROOT/config/aerospace/scenes.local.json"
-PICKER="$DOT_ROOT/config/aerospace/bin/picker"
 
 # Apps of the workspace being saved, for the descriptor and the prompt. The
 # menu computes descriptors before the picker takes focus, so `focused` is
@@ -29,7 +27,7 @@ current_apps() {
 }
 
 if [ "${1:-}" = "--describe" ]; then
-  ws="${DOT_ORIG_WS:-$($AEROSPACE list-workspaces --focused 2>/dev/null)}"
+  ws="$(orig_ws)"
   apps="$(current_apps "$ws")"
   jq -n --arg ws "$ws" --arg apps "$apps" '{
     id: "scene.save",
@@ -48,7 +46,8 @@ if [ "${1:-}" = "--describe" ]; then
   exit 0
 fi
 
-NAME=""; RATIO="0.6"; ICON="󰍹"; BADGE="BLUE"; LABEL=""; FORCE=0
+DEFAULT_ICON="󰍹"; DEFAULT_BADGE="BLUE"
+NAME=""; RATIO=""; ICON=""; BADGE=""; LABEL=""; FORCE=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --ratio) RATIO="${2:-}"; shift 2 ;;
@@ -61,33 +60,29 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-WS="${DOT_ORIG_WS:-$($AEROSPACE list-workspaces --focused)}"
+WS="$(orig_ws)"
 WINDOWS="$($AEROSPACE list-windows --workspace "$WS" --format '%{window-id}|%{app-name}')"
 [ -n "$WINDOWS" ] || { echo "scene save: workspace $WS has no windows to save" >&2; exit 1; }
 
 PROMPTED=0
 if [ -z "$NAME" ]; then
-  [ -x "$PICKER" ] || { echo "usage: dot scene save <name>" >&2; exit 1; }
-  NAME="$(PICKER_MODE=input PICKER_PROMPT="Name this scene ($(current_apps "$WS"))" \
-          "$PICKER" </dev/null)"
+  NAME="$(ask "Name this scene ($(current_apps "$WS"))")" || exit 1
   PROMPTED=1
 fi
-# Scene names address a scene on the command line, so keep them addressable.
-NAME="$(printf '%s' "$NAME" | tr '[:upper:] ' '[:lower:]-' | tr -cd 'a-z0-9._-')"
+NAME="$(slug "$NAME")"
 [ -n "$NAME" ] || exit 0
 
 # Don't quietly replace something you already have. Ask the way you were asked:
 # a name that came from the picker gets a picker confirm, a name typed on the
 # command line gets a command-line refusal. Testing for a tty instead meant
 # every non-interactive run silently opened a panel nobody could see.
-EXISTS=0
-"$DOT_ROOT/config/aerospace/scene.sh" --scenes-json 2>/dev/null \
-  | jq -e --arg n "$NAME" 'has($n)' >/dev/null 2>&1 && EXISTS=1
-if [ "$EXISTS" -eq 1 ] && [ "$FORCE" -eq 0 ]; then
+# Don't quietly replace something you already have. Ask the way you were asked:
+# a name that came from the picker gets a picker confirm, a name typed on the
+# command line gets a command-line refusal. Testing for a tty instead meant
+# every non-interactive run silently opened a panel nobody could see.
+if scene_exists "$NAME" && [ "$FORCE" -eq 0 ]; then
   if [ "$PROMPTED" -eq 1 ]; then
-    ans="$(printf 'Replace "%s"\tthe scene already exists\nCancel\t\n' "$NAME" \
-           | PICKER_PROMPT="Scene '$NAME' already exists" PICKER_CONTEXT=confirm "$PICKER")"
-    case "$ans" in Replace*) ;; *) exit 0 ;; esac
+    confirm "Scene '$NAME' already exists" "Replace \"$NAME\"" "the scene already exists" || exit 0
   else
     echo "scene save: '$NAME' already exists. Use --force to replace it." >&2
     exit 1
@@ -135,18 +130,38 @@ SPECS="$(
 
 COUNT="$(printf '%s' "$SPECS" | jq 'length')"
 [ "${COUNT:-0}" -gt 0 ] || { echo "scene save: nothing to save" >&2; exit 1; }
-[ -n "$LABEL" ] || LABEL="$NAME"
 
+# Merge, do not replace.
+#
+# `. + {($n): {...}}` overwrote the whole object, so re-saving a scene silently
+# discarded everything `dot scene edit` had set on it -- including the
+# "quit": true you had just turned on.
+#
+# Precedence, lowest first: the defaults, then what the scene already is, then
+# what you asked for on this run. `windows` always wins outright, because
+# re-capturing them is the entire point. The "already is" layer is read from
+# the *merged* view, so re-saving one of the shipped scenes keeps its icon and
+# colour rather than resetting them to the defaults.
+CURRENT="$("$SCENE_SH" --scenes-json 2>/dev/null | jq -c --arg n "$NAME" '.[$n] // {}')"
 [ -f "$SCENES_LOCAL" ] || echo '{}' > "$SCENES_LOCAL"
-tmp="$SCENES_LOCAL.tmp"
+
+tmp="$(mktemp)"
 jq --arg n "$NAME" --arg icon "$ICON" --arg label "$LABEL" --arg badge "$BADGE" \
-   --argjson ratio "$RATIO" --argjson windows "$SPECS" \
-   '. + {($n): {icon:$icon, label:$label, badge:$badge, ratio:$ratio, windows:$windows}}' \
-   "$SCENES_LOCAL" > "$tmp" && mv "$tmp" "$SCENES_LOCAL" || {
+   --arg ratio "$RATIO" --arg dicon "$DEFAULT_ICON" --arg dbadge "$DEFAULT_BADGE" \
+   --argjson windows "$SPECS" --argjson current "${CURRENT:-{\}}" '
+     .[$n] = ({icon: $dicon, label: $n, badge: $dbadge, ratio: 0.6}
+              + $current
+              + (if $icon  != "" then {icon:  $icon}             else {} end)
+              + (if $label != "" then {label: $label}            else {} end)
+              + (if $badge != "" then {badge: $badge}            else {} end)
+              + (if $ratio != "" then {ratio: ($ratio|tonumber)} else {} end)
+              + {windows: $windows})' \
+   "$SCENES_LOCAL" > "$tmp" && mv "$tmp" "$SCENES_LOCAL" && rm -f "$SCENES_CACHE" || {
      rm -f "$tmp"; echo "scene save: could not write $SCENES_LOCAL" >&2; exit 1; }
 
 audit "scene save $NAME ($COUNT window(s) from workspace $WS)"
 printf "saved scene '%s' from workspace %s:\n" "$NAME" "$WS"
 printf '%s' "$SPECS" | jq -r '.[] | "  " + .'
-printf '  ratio %s, badge %s  ->  %s\n' "$RATIO" "$BADGE" "${SCENES_LOCAL/#$HOME/~}"
+jq -r --arg n "$NAME" '.[$n] | "  ratio \(.ratio), badge \(.badge)"' "$SCENES_LOCAL"
+printf '  -> %s\n' "${SCENES_LOCAL/#$HOME/~}"
 printf '  open it with: dot scene open %s\n' "$NAME"

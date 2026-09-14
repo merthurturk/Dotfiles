@@ -4,9 +4,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
 if [ "${1:-}" = "--describe" ]; then
   jq -n \
-    --argjson choices "$("$DOT_ROOT/config/aerospace/scene.sh" --scenes-json | jq -c 'keys')" \
+    --argjson choices "$(scenes_json | jq -c 'keys')" \
     --argjson instances "$(
-      "$DOT_ROOT/config/aerospace/scene.sh" --describe 2>/dev/null \
+      "$SCENE_SH" --describe 2>/dev/null \
       | while IFS=$'\t' read -r name summary; do
           # Per scene, not the first `dot scene open` line in the config: that
           # one belongs to whichever scene happens to be bound, and was being
@@ -30,4 +30,4 @@ if [ "${1:-}" = "--describe" ]; then
 fi
 
 audit "scene open ${*:-}"
-exec "$DOT_ROOT/config/aerospace/scene.sh" "$@"
+exec "$SCENE_SH" "$@"

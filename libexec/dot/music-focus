@@ -2,16 +2,16 @@
 set -u
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 if [ "${1:-}" = "--describe" ]; then
+  # Read what the bar published, do not ask Music again.
+  #
+  # This used to run its own AppleScript round-trip -- ~130ms, which made it the
+  # slowest descriptor of all thirty and over half the palette's entire latency
+  # budget, for an answer plugins/music.sh already fetches every 5 seconds for
+  # the now-playing chip. The chip's update_freq bounds how stale this can be,
+  # and it is a detail line in a menu.
   now=""
-  # ps, not pgrep: pgrep cannot see an app bundle's process (see docs/macos.md).
-  if ps -Ao comm= | grep -qi 'Music\.app'; then
-    now="$(osascript -e 'tell application "Music"
-      if player state is playing or player state is paused then
-        return (artist of current track) & " — " & (name of current track)
-      end if
-    end tell' 2>/dev/null)"
-  fi
-  jq -n --arg now "$now" '{
+  [ -r "$STATE_DIR/now-playing" ] && IFS= read -r now < "$STATE_DIR/now-playing"
+  jq -n --arg now "${now:-}" '{
     id:"music.focus", summary:"Focus the Apple Music window", args:[],
     destructive:false,
     instances: (if $now != "" then [{label:"Focus Music", detail:$now, args:[]}] else [] end)}'

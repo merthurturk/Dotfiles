@@ -9,35 +9,20 @@
 set -u
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
-SCENE_SH="$DOT_ROOT/config/aerospace/scene.sh"
-
 if [ "${1:-}" = "--describe" ]; then
   # The scene under the cursor is the one on the workspace you were looking at
   # before the palette took focus.
-  ws="${DOT_ORIG_WS:-$($AEROSPACE list-workspaces --focused 2>/dev/null)}"
-  name="$(awk -F'\t' -v w="$ws" '$1 == w { print $2; exit }' "$STATE_DIR/scenes" 2>/dev/null)"
+  ws="$(orig_ws)"
+  name="$(awk -F'\t' -v w="$ws" '$1 == w { print $2; exit }' "$LEDGER" 2>/dev/null)"
 
   instances='[]'
   if [ -n "$name" ]; then
     # Occupied workspaces, plus the first empty one. Offering all 28 empty
     # workspaces would bury the palette in rows that are all the same row --
     # same reason `dot window send` shows one.
-    instances="$(
-      $AEROSPACE list-windows --monitor all --format '%{workspace}|%{app-name}' \
-        | sort -u \
-        | jq -R -s --arg cur "$ws" --arg name "$name" \
-              --arg empty "$($AEROSPACE list-workspaces --monitor all --empty | head -1)" \
-              --arg state "$(cat "$STATE_DIR/scenes" 2>/dev/null)" '
-            ($state | split("\n") | map(select(length>0) | split("\t"))
-                    | map({(.[0]): .[1]}) | add // {}) as $scenes
-            | (if $empty == "" then [] else [{ws: $empty, apps: "empty"}] end)
-              + (split("\n") | map(select(length>0) | split("|"))
-                 | group_by(.[0])
-                 | map({ws: .[0][0], apps: (map(.[1]) | join(", "))}))
-            | map(select(.ws != $cur))
-            | map({label: ("Move " + $name + " to workspace " + .ws),
-                   detail: (if $scenes[.ws] then "scene: " + $scenes[.ws] else .apps end),
-                   args: [.ws]})')"
+    instances="$(workspace_rows "$ws" \
+      | jq --arg name "$name" 'map({label: ("Move " + $name + " to workspace " + .ws),
+                                    detail, args: [.ws]})')"
   fi
 
   jq -n --argjson instances "$instances" '{

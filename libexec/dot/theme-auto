@@ -17,7 +17,17 @@ PREFS="$STATE_DIR/theme-auto"
 AGENT="sh.dotfiles.theme-auto"
 PLIST="$HOME/Library/LaunchAgents/$AGENT.plist"
 
-appearance_of() { jq -r '.appearance // "light"' "$THEMES/$1/meta.json" 2>/dev/null; }
+# name -> appearance for every theme, in one jq rather than a jq and two
+# basenames per directory. With five themes that was ~30 forks before the
+# descriptor had even started.
+_APPEARANCES=""
+appearances() {
+  [ -n "$_APPEARANCES" ] || _APPEARANCES="$(
+    jq -r 'input_filename as $f | ($f | split("/")[-2]) + "\t" + (.appearance // "light")' \
+       "$THEMES"/*/meta.json 2>/dev/null)"
+  printf '%s\n' "$_APPEARANCES"
+}
+appearance_of() { appearances | awk -F'\t' -v n="$1" '$1 == n { print $2; exit }'; }
 
 # Default to the theme you are already on for its own half of the day. Picking
 # the first one on disk instead would mean that turning this on changed the
@@ -26,12 +36,10 @@ appearance_of() { jq -r '.appearance // "light"' "$THEMES/$1/meta.json" 2>/dev/n
 # still works on a fork that ships neither default.
 default_for() {
   local cur; cur="$(cat "$STATE_DIR/theme" 2>/dev/null)"
-  if [ -n "$cur" ] && [ -d "$THEMES/$cur" ] && [ "$(appearance_of "$cur")" = "$1" ]; then
+  if [ -n "$cur" ] && [ "$(appearance_of "$cur")" = "$1" ]; then
     printf '%s' "$cur"; return
   fi
-  local t; for t in "$THEMES"/*/; do
-    [ "$(appearance_of "$(basename "$t")")" = "$1" ] && { basename "$t"; return; }
-  done
+  appearances | awk -F'\t' -v a="$1" '$2 == a { print $1; exit }'
 }
 
 pref() { sed -n "s/^$1=//p" "$PREFS" 2>/dev/null | head -1; }
@@ -53,7 +61,7 @@ SUN="$STATE_DIR/sun"   # "<yyyy-mm-dd> <sunrise epoch> <sunset epoch>"
 sun_times() {
   local today line out rise set
   today="$(date +%F)"
-  line="$(cat "$SUN" 2>/dev/null)"
+  line=""; [ -r "$SUN" ] && IFS= read -r line < "$SUN"
   case "$line" in "$today "*) printf '%s' "${line#* }"; return 0 ;; esac
 
   out="$(/usr/libexec/corebrightnessdiag nightshift-internal 2>/dev/null)"
@@ -91,6 +99,7 @@ if [ "${1:-}" = "--describe" ]; then
     id: "theme.auto",
     summary: "Follow the sun: light theme by day, dark after sunset",
     args: [{name:"on|off", required:false},
+           {name:"--would-override", required:false, note:"what dot theme set asks"},
            {name:"--light", required:false, default:$light},
            {name:"--dark", required:false, default:$dark},
            {name:"--apply", required:false, note:"what the launchd agent runs"}],
@@ -105,6 +114,18 @@ if [ "${1:-}" = "--describe" ]; then
           detail: ($light + " / " + $dark + ", " + $want + " now"), args: ["on"]}]
       end)
   }'
+  exit 0
+fi
+
+# Answer for `dot theme set`, so it does not have to know this agent's launchd
+# label or the format of its prefs file. Prints the warning, or nothing.
+if [ "${1:-}" = "--would-override" ]; then
+  enabled || exit 0
+  half="$(appearance_of "${2:-}")"; [ -n "$half" ] || exit 0
+  mine="$(pref "$half")"; [ -n "$mine" ] || mine="$(default_for "$half")"
+  [ -n "$mine" ] && [ "$mine" != "${2:-}" ] || exit 0
+  echo "  theme auto is on and will put $mine back -- keep this one with:"
+  echo "    dot theme auto --$half ${2:-}"
   exit 0
 fi
 
@@ -157,10 +178,12 @@ esac
 
 # Status, which is also what `dot theme auto` on its own prints.
 if enabled; then
-  want="$(daylight)"; src="the sun here"; daylight >/dev/null || src="the clock"
+  # daylight already reports its provenance in its exit status, and an
+  # assignment from a command substitution carries that status through.
+  if want="$(daylight)"; then src="the sun here"; else src="the clock"; fi
   printf 'theme auto: on -- %s by day, %s at night (%s now, by %s)\n' \
          "$LIGHT" "$DARK" "$want" "$src"
-  [ "$ACTION" = "on" ] && "$DOT_ROOT/libexec/dot/theme-auto" --apply
+  [ "$ACTION" = "on" ] && exec "$0" --apply
 else
   printf 'theme auto: off -- would use %s by day, %s at night\n' "$LIGHT" "$DARK"
 fi

@@ -17,6 +17,12 @@ TOML="$DOT_ROOT/aerospace.toml"
 BEGIN='# --- pinned apps: managed by `dot window pin` ---------------------------'
 END='# --- end pinned apps ---------------------------------------------------'
 
+# Trailing blank lines are not content: inserting the block for the first time
+# adds a separator line that belongs to neither side.
+squeeze_blanks() {
+  awk '/^[[:space:]]*$/ { blanks++; next } { while (blanks-- > 0) print ""; blanks = 0; print }'
+}
+
 # Existing rules as "<app-id>\t<workspace>\t<app name>", from the TOML itself.
 # Regenerating from a side file would mean two sources of truth for one fact,
 # and the one you'd edit by hand would be the one that loses.
@@ -39,13 +45,10 @@ pinned() {
   ' "$TOML"
 }
 
-focused() { $AEROSPACE list-windows --focused --format "$1" 2>/dev/null; }
-
 if [ "${1:-}" = "--describe" ]; then
   # The app under the palette is the user's, not the picker's -- read it from
   # what menu captured before it took focus.
-  wid="${DOT_ORIG_WID:-$(focused '%{window-id}')}"
-  ws="${DOT_ORIG_WS:-$($AEROSPACE list-workspaces --focused 2>/dev/null)}"
+  wid="$(orig_wid)"; ws="$(orig_ws)"
   app=""; appid=""
   if [ -n "$wid" ]; then
     IFS='|' read -r appid app <<<"$($AEROSPACE list-windows --all \
@@ -95,13 +98,13 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-WID="${DOT_ORIG_WID:-$(focused '%{window-id}')}"
+WID="$(orig_wid)"
 [ -n "$WID" ] || { echo "window pin: no focused window" >&2; exit 1; }
 IFS='|' read -r APPID APP <<<"$($AEROSPACE list-windows --all \
   --format '%{window-id}|%{app-bundle-id}|%{app-name}' \
   | awk -F'|' -v w="$WID" '$1 == w { print $2 "|" $3; exit }')"
 [ -n "${APPID:-}" ] || { echo "window pin: could not identify that window's app" >&2; exit 1; }
-[ -n "$WS" ] || WS="${DOT_ORIG_WS:-$($AEROSPACE list-workspaces --focused)}"
+[ -n "$WS" ] || WS="$(orig_ws)"
 
 # Rebuild the whole managed block from the rules that should be in it. Editing
 # in place would mean a second parser that has to agree with the first one.
@@ -145,25 +148,25 @@ if grep -qF "$BEGIN" "$TOML"; then
     $0 == e { skip = 0; next }
     !skip' "$TOML" > "$tmp" || { echo "window pin: could not rewrite the config" >&2; exit 1; }
   # Removing the block can leave the file ending in blank lines.
-  awk '/^[[:space:]]*$/ { blanks++; next }
-       { while (blanks-- > 0) print ""; blanks = 0; print }' "$tmp" > "$tmp.trim" \
-    && mv "$tmp.trim" "$tmp"
+  squeeze_blanks < "$tmp" > "$tmp.trim" && mv "$tmp.trim" "$tmp"
 else
   # Array-of-tables headers have to come after every bare key in the file, or
-  # those keys land inside the rule instead of at the root. The end is the only
-  # place that is unconditionally safe.
+  # those keys land inside the rule instead of at the root. The end of the file
+  # is the only place that is unconditionally safe.
+  #
+  # This is compatible with "[exec] must be the last table in the file": that
+  # rule is about bare keys, which a table header captures. [[on-window-detected]]
+  # is itself a table header, so it ends [exec.env-vars] rather than being
+  # swallowed by it. aerospace.toml says so at the [exec] comment.
   { cat "$TOML"; printf '\n'; cat "$blockfile"; } > "$tmp"
 fi
 
 # Everything outside the managed block must be byte-identical. This is the
 # check that matters: "the result parses" would have been happy with a file
 # that lost the entire config, which is exactly the failure that happened.
-# Trailing blank lines are not content: appending the block for the first time
-# adds a separator line that belongs to neither side.
 strip_block() {
   awk -v b="$BEGIN" -v e="$END" '
-    $0 == b { skip = 1 } { if (!skip) print } $0 == e { skip = 0 }' "$1" \
-  | awk '/^[[:space:]]*$/ { blanks++; next } { while (blanks-- > 0) print ""; blanks = 0; print }'
+    $0 == b { skip = 1 } { if (!skip) print } $0 == e { skip = 0 }' "$1" | squeeze_blanks
 }
 if ! diff -q <(strip_block "$TOML") <(strip_block "$tmp") >/dev/null; then
   echo "window pin: rewrite would have changed the rest of the config, refusing" >&2

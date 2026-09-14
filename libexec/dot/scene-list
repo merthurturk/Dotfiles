@@ -15,10 +15,10 @@ fi
 # scene.sh owns the scenes.json + scenes.local.json merge; ask it rather than
 # repeating it here, which is how a scene you saved could be missing from this
 # list while showing up in the launcher.
-defined_json="$("$DOT_ROOT/config/aerospace/scene.sh" --scenes-json 2>/dev/null | jq -c 'keys')"
+defined_json="$(scenes_json | jq -c 'keys')"
 [ -n "$defined_json" ] || defined_json='[]'
 
-open_json="$("$DOT_ROOT/config/aerospace/scene.sh" --open-scenes 2>/dev/null \
+open_json="$("$SCENE_SH" --open-scenes 2>/dev/null \
   | jq -R -s 'split("\n") | map(select(length>0)) | map(split("\t"))
               | map({workspace: .[0], scene: .[1]})')"
 

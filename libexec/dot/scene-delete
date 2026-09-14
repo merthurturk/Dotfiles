@@ -13,13 +13,10 @@
 set -u
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
-SCENE_SH="$DOT_ROOT/config/aerospace/scene.sh"
-LOCAL="$DOT_ROOT/config/aerospace/scenes.local.json"
 SHIPPED="$DOT_ROOT/config/aerospace/scenes.json"
-LEDGER="$STATE_DIR/scenes"
 
 if [ "${1:-}" = "--describe" ]; then
-  jq -n --argjson choices "$("$SCENE_SH" --scenes-json 2>/dev/null | jq -c 'keys')" '{
+  jq -n --argjson choices "$(scenes_json | jq -c 'keys')" '{
     id: "scene.delete",
     summary: "Delete a scene definition, leaving its windows alone",
     args: [{name:"name", required:true, choices:$choices},
@@ -41,8 +38,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -n "$NAME" ] || { echo "usage: dot scene delete <name> [--force]" >&2; exit 1; }
-"$SCENE_SH" --scenes-json 2>/dev/null | jq -e --arg n "$NAME" 'has($n)' >/dev/null 2>&1 \
-  || { echo "scene delete: no scene '$NAME'" >&2; exit 1; }
+scene_exists "$NAME" || { echo "scene delete: no scene '$NAME'" >&2; exit 1; }
 
 OPEN="$(awk -F'\t' -v s="$NAME" '$2 == s { print $1 }' "$LEDGER" 2>/dev/null | paste -sd ', ' -)"
 
@@ -69,20 +65,20 @@ fi
 # A tombstone, not a deletion, for a scene this repo ships: dropping the key
 # would only let the shipped one back in on the next merge, which reads as the
 # delete having quietly failed.
-[ -f "$LOCAL" ] || echo '{}' > "$LOCAL"
-tmp="$LOCAL.tmp"
-jq --arg n "$NAME" --argjson shipped "$(jq --arg n "$NAME" 'has($n)' "$SHIPPED")" \
-   'if $shipped then .[$n] = null else del(.[$n]) end' "$LOCAL" > "$tmp" && mv "$tmp" "$LOCAL"
+json_update "$SCENES_LOCAL" --arg n "$NAME" \
+  --argjson shipped "$(jq --arg n "$NAME" 'has($n)' "$SHIPPED")" \
+  'if $shipped then .[$n] = null else del(.[$n]) end'
 
 # Forget any open copy. The windows are still there and still yours; they are
 # just ordinary windows now, so the pill goes back to showing app icons and
 # `dot scene close` stops offering to close them as a group.
 if [ -n "$OPEN" ] && [ -f "$LEDGER" ]; then
-  awk -F'\t' -v s="$NAME" '$2 != s' "$LEDGER" > "$LEDGER.tmp" && mv "$LEDGER.tmp" "$LEDGER"
+  ledger="$(mktemp)"
+  awk -F'\t' -v s="$NAME" '$2 != s' "$LEDGER" > "$ledger" && mv "$ledger" "$LEDGER"
 fi
 
 audit "scene delete $NAME${OPEN:+ (was open on $OPEN)}"
-sketchybar --trigger aerospace_workspace_change >/dev/null 2>&1 || true
+repaint
 printf "deleted scene '%s'\n" "$NAME"
 [ -n "$OPEN" ] && printf '  its windows on workspace %s are untouched\n' "$OPEN"
 exit 0

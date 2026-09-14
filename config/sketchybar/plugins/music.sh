@@ -19,7 +19,14 @@ if [ "$SENDER" = "mouse.entered" ]; then
   exit 0
 fi
 
-hide() { sketchybar --set "$NAME" drawing=off; exit 0; }
+# What is playing, for anything that wants it without paying for the
+# AppleScript round-trip again. `dot music focus --describe` was doing its own,
+# on every ⌥space: ~130ms, the single most expensive thing on that path, for an
+# answer this plugin already has and refreshes every 5s.
+NOW_PLAYING="${XDG_STATE_HOME:-$HOME/.local/state}/aerospace/now-playing"
+publish() { mkdir -p "$(dirname "$NOW_PLAYING")"; printf '%s\n' "$1" > "$NOW_PLAYING"; }
+
+hide() { publish ""; sketchybar --set "$NAME" drawing=off; exit 0; }
 
 # Never launch Music just to ask what it's playing.
 pgrep -x Music >/dev/null 2>&1 || hide
@@ -62,6 +69,8 @@ MAX=28
 if [ ${#LABEL} -gt $MAX ]; then
   LABEL="$(printf '%.*s' $((MAX - 1)) "$LABEL")…"
 fi
+
+publish "$ARTIST — $TRACK"
 
 # border_color is set here too, so a mouse.exited repaint clears the hover ring.
 sketchybar --set "$NAME" drawing=on \

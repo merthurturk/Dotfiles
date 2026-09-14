@@ -78,8 +78,10 @@ now checks the tools against that PATH.
 ### No absolute paths
 
 No `/Users/<name>`, no `/opt/homebrew`. Use `$HOME`, and the `[exec]` `PATH`
-table in `aerospace.toml` — which must stay the **last** table in the file,
-because a TOML table captures every key after it.
+table in `aerospace.toml` — which must stay the last table **carrying bare
+keys**, because a TOML table captures every key after it. A later table
+*header* is fine and ends it: that is where `dot window pin` appends its
+`[[on-window-detected]]` rules.
 
 ### Data over code
 
