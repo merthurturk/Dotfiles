@@ -6,7 +6,7 @@ if [ "${1:-}" = "--describe" ]; then
   jq -n \
     --argjson choices "$(scenes_json | jq -c 'keys')" \
     --argjson instances "$(
-      "$SCENE_SH" --describe 2>/dev/null \
+      { _scenes_lib; scenes_summary_tsv; } 2>/dev/null \
       | while IFS=$'\t' read -r name summary; do
           # Per scene, not the first `dot scene open` line in the config: that
           # one belongs to whichever scene happens to be bound, and was being

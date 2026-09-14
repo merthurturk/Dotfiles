@@ -57,29 +57,16 @@ filter, and follow a scene through a move for free.
 than "the bar repainted" — `aerospace_workspace_change` is also fired by hover,
 by `theme set` and by `scene edit`.*
 
-### Give `scene.sh` the write side, not just the read side
+### ~~One window snapshot for the whole palette~~ — measured, not worth it
 
-`scene.sh` owns *reading* the merged scenes; writing is still scattered.
-`scene-save`, `scene-edit` and `scene-delete` each write `scenes.local.json`,
-and the tombstone rule (`null` for a shipped scene, `del` for a local one) is
-spelled out twice. Five capabilities parse or rewrite the ledger's TSV with
-their own awk, so its column count is public API.
+The estimate behind this was wrong. It is not thirty descriptors opening their
+own connection; it is **nine calls in the worst case**, from five capabilities,
+at about 7ms each and running in parallel. Deduplicating them would buy perhaps
+5ms of a 163ms open, in exchange for threading a snapshot through an interface
+this project promises to keep simple.
 
-`scene.sh --set <name> <json>`, `--delete <name>`, `--rename <old> <new>` and
-`--forget <name|workspace>` would put every one of those behind the file's
-owner.
-
-*Medium. `json_update` in `_lib.sh` already took the atomicity half of this.*
-
-### One window snapshot for the whole palette
-
-Roughly thirty descriptors each open their own `aerospace` connection on every
-⌥space, several asking the identical question. `dot capabilities` could take
-the snapshot once and export it, the way `dot menu` already exports
-`DOT_ORIG_WS` and `DOT_ORIG_WID`.
-
-*Medium — it changes the descriptor contract, which is the one interface this
-project promises not to make complicated.*
+Left here as a record of the measurement, so nobody re-derives the same wrong
+estimate from the same plausible reasoning.
 
 ---
 

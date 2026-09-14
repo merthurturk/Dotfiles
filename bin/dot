@@ -70,21 +70,33 @@ capabilities() {
   # for every ⌥space, so it runs the probes concurrently and assembles once.
   # Serially, with a jq to validate and another to append per capability, this
   # took 520ms; the appends also re-serialised a growing array each time.
+  # Two things here are deliberate and measured, on an 8-core machine where 31
+  # descriptors take about four waves:
+  #
+  #   `bash "$LIBEXEC/$c"` rather than executing the file. Exec'ing a script
+  #   costs ~15ms more than handing the same file to bash -- the kernel
+  #   validates an executable, bash just reads a file -- and that is paid once
+  #   per capability. Worth ~30ms of the total. The shebangs stay, because
+  #   every one of these is also a command you can run yourself.
+  #
+  #   No jq per capability. Adding `command` used to fork one for each, 31
+  #   processes to add one key; `input_filename` lets the single assembling jq
+  #   do it from the file name it is already reading.
   local tmp c
   tmp="$(mktemp -d)"
 
   while IFS= read -r c; do
     [ -n "$c" ] || continue
-    {
-      "$LIBEXEC/$c" --describe 2>/dev/null \
-        | jq -c --arg cmd "dot ${c/-/ }" '. + {command: $cmd}' 2>/dev/null \
-        > "$tmp/$c"
-    } &
+    { bash "$LIBEXEC/$c" --describe > "$tmp/$c" 2>/dev/null; } &
   done < <(list_commands)
   wait
 
   # Filenames sort the same way list_commands does, so order is unchanged.
-  cat "$tmp"/* 2>/dev/null | jq -s '.'
+  # `// empty` drops anything that failed to produce valid JSON rather than
+  # failing the whole surface; check-capabilities.sh is what catches that.
+  jq -n '[ inputs
+           | . + {command: ("dot " + (input_filename | split("/")[-1] | sub("-"; " ")))} ]' \
+     "$tmp"/* 2>/dev/null || echo '[]'
   rm -rf "$tmp"
 }
 

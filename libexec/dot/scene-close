@@ -4,7 +4,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
 if [ "${1:-}" = "--describe" ]; then
   jq -n --argjson quits "$(scenes_json | jq -c 'with_entries(.value = (.value.quit // false))')" \
-        --argjson open "$("$SCENE_SH" --open-scenes 2>/dev/null \
+        --argjson open "$(_ledger_lib; ledger_rows \
                           | jq -R -s 'split("\n") | map(select(length>0) | split("\t"))')" '
     {
       id: "scene.close",

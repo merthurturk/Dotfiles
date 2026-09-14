@@ -12,6 +12,7 @@
 set -u
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
+_ledger_lib
 HIST="$STATE_DIR/scene-focus"
 
 # The most recently focused scene workspace that isn't the one you are on, and
@@ -23,8 +24,7 @@ target() {
   while IFS= read -r ws; do
     [ -n "$ws" ] || continue
     [ "$ws" = "$cur" ] && continue
-    awk -F'\t' -v w="$ws" '$1 == w { found = 1 } END { exit !found }' "$LEDGER" 2>/dev/null \
-      && { printf '%s' "$ws"; return 0; }
+    [ -n "$(ids_of "$ws")" ] && { printf '%s' "$ws"; return 0; }
   done < "$HIST"
   return 1
 }
@@ -32,7 +32,7 @@ target() {
 if [ "${1:-}" = "--describe" ]; then
   cur="$(orig_ws)"
   ws="$(target "$cur")" || ws=""
-  name="$(awk -F'\t' -v w="$ws" '$1 == w { print $2; exit }' "$LEDGER" 2>/dev/null)"
+  name="$(scene_of "$ws")"
   jq -n --arg ws "$ws" --arg name "$name" \
         --arg kb "$(keysym "$(keybinding 'dot scene last')")" '{
     id: "scene.last",
@@ -56,7 +56,7 @@ WS="$(target "$CUR")" || {
 
 # Land on the scene's own window, not whatever AeroSpace last focused there --
 # same reason scene open asserts it.
-FIRST="$(awk -F'\t' -v w="$WS" '$1 == w { print $3; exit }' "$LEDGER" 2>/dev/null | cut -d, -f1)"
+FIRST="$(ids_of "$WS" | cut -d, -f1)"
 audit "scene last -> $WS"
 $AEROSPACE eval "workspace $WS${FIRST:+; focus --window-id $FIRST}" >/dev/null 2>&1 \
   || $AEROSPACE workspace "$WS"

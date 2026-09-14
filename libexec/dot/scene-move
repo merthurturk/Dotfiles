@@ -13,7 +13,7 @@ if [ "${1:-}" = "--describe" ]; then
   # The scene under the cursor is the one on the workspace you were looking at
   # before the palette took focus.
   ws="$(orig_ws)"
-  name="$(awk -F'\t' -v w="$ws" '$1 == w { print $2; exit }' "$LEDGER" 2>/dev/null)"
+  name="$(_ledger_lib; scene_of "$ws")"
 
   instances='[]'
   if [ -n "$name" ]; then

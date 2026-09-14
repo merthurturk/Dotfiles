@@ -65,6 +65,11 @@ keysym() {
 # Sourced on first use, not at the top: two thirds of the capabilities never
 # ask about a scene, and parsing the file in all thirty-one of them cost more
 # than it saved in the five that do.
+_ledger_lib() {
+  [ -n "${LEDGER_DIR:-}" ] && return 0
+  # shellcheck source=/dev/null
+  source "$DOT_ROOT/config/aerospace/ledger-lib.sh"
+}
 _scenes_lib() {
   [ -n "${SCENES_CACHE:-}" ] && return 0
   # shellcheck source=/dev/null

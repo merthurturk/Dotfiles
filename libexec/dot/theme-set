@@ -12,13 +12,11 @@ if [ "${1:-}" = "--describe" ]; then
   jq -n \
     --argjson choices "$(ls "$THEMES" | jq -R -s 'split("\n")|map(select(length>0))')" \
     --argjson instances "$(
-      for t in "$THEMES"/*/; do
-        n="$(basename "$t")"
-        [ "$n" = "$current" ] && continue
-        jq -n --arg n "$n" --arg label "$(jq -r '.name' "$t/meta.json")" \
-              --arg app "$(jq -r '.appearance' "$t/meta.json")" \
-          '{label: ("Theme: " + $label), detail: $app, args: [$n]}'
-      done | jq -s '.')" '{
+      jq -n --arg cur "$current" '
+        [ inputs | {n: (input_filename | split("/")[-2]), label: .name, app: .appearance} ]
+        | map(select(.n != $cur))
+        | map({label: ("Theme: " + .label), detail: .app, args: [.n]})' \
+        "$THEMES"/*/meta.json)" '{
       id: "theme.set",
       summary: "Switch the bar and terminal theme together",
       args: [{name:"theme", required:true, choices:$choices}],

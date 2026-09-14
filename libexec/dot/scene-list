@@ -18,7 +18,7 @@ fi
 defined_json="$(scenes_json | jq -c 'keys')"
 [ -n "$defined_json" ] || defined_json='[]'
 
-open_json="$("$SCENE_SH" --open-scenes 2>/dev/null \
+open_json="$(_ledger_lib; ledger_rows \
   | jq -R -s 'split("\n") | map(select(length>0)) | map(split("\t"))
               | map({workspace: .[0], scene: .[1]})')"
 

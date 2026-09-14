@@ -40,7 +40,8 @@ done
 [ -n "$NAME" ] || { echo "usage: dot scene delete <name> [--force]" >&2; exit 1; }
 scene_exists "$NAME" || { echo "scene delete: no scene '$NAME'" >&2; exit 1; }
 
-OPEN="$(awk -F'\t' -v s="$NAME" '$2 == s { print $1 }' "$LEDGER" 2>/dev/null | paste -sd ', ' -)"
+_ledger_lib
+OPEN="$(workspaces_of "$NAME")"
 
 if [ "$FORCE" -eq 0 ]; then
   detail="the definition only; no windows are closed"
@@ -72,10 +73,7 @@ json_update "$SCENES_LOCAL" --arg n "$NAME" \
 # Forget any open copy. The windows are still there and still yours; they are
 # just ordinary windows now, so the pill goes back to showing app icons and
 # `dot scene close` stops offering to close them as a group.
-if [ -n "$OPEN" ] && [ -f "$LEDGER" ]; then
-  ledger="$(mktemp)"
-  awk -F'\t' -v s="$NAME" '$2 != s' "$LEDGER" > "$ledger" && mv "$ledger" "$LEDGER"
-fi
+[ -n "$OPEN" ] && ledger_forget_scene "$NAME"
 
 audit "scene delete $NAME${OPEN:+ (was open on $OPEN)}"
 repaint

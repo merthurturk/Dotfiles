@@ -13,6 +13,7 @@
 set -u
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
+_ledger_lib
 NL=$'\n'
 
 # "<workspace>\t<scene>" for each scene of the previous session that is still
@@ -23,11 +24,10 @@ pending() {
   # fork scene.sh and jq per row -- on the palette path, on the first ⌥space
   # after a reboot, which is exactly when there is most to restore.
   local defined; defined="$(scenes_json | jq -r 'keys[]')"
-  "$SCENE_SH" --previous-session 2>/dev/null | while IFS=$'\t' read -r ws name; do
+  previous_session_rows 2>/dev/null | while IFS=$'\t' read -r ws name; do
     [ -n "${name:-}" ] || continue
     case "$NL$defined$NL" in *"$NL$name$NL"*) ;; *) continue ;; esac
-    awk -F'\t' -v s="$name" '$2 == s { found = 1 } END { exit !found }' "$LEDGER" 2>/dev/null \
-      && continue
+    [ -n "$(workspaces_of "$name")" ] && continue
     printf '%s\t%s\n' "$ws" "$name"
   done
 }
@@ -51,7 +51,7 @@ if [ "${1:-}" = "--describe" ]; then
 fi
 
 case "${1:-}" in
-  --forget) "$SCENE_SH" --forget-previous; audit "scene restore --forget"
+  --forget) forget_previous_session; audit "scene restore --forget"
             echo "forgot the previous session"; exit 0 ;;
   --list)   rows="$(pending)"
             [ -n "$rows" ] || { echo "nothing to restore"; exit 0; }
@@ -79,6 +79,6 @@ done <<<"$ROWS"
 
 # Only once they are back. Failing halfway and forgetting anyway would lose the
 # one record of what you had.
-[ "$restored" -gt 0 ] && "$SCENE_SH" --forget-previous
+[ "$restored" -gt 0 ] && forget_previous_session
 audit "scene restore ($restored scene(s))"
 printf 'restored %s scene(s)\n' "$restored"

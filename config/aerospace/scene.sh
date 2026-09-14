@@ -18,116 +18,9 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$DIR/logging.sh"
 source "$DIR/split-lib.sh"
 source "$DIR/scenes-lib.sh"
+source "$DIR/ledger-lib.sh"
 
 LOCAL_STATE="$HOME/Library/Application Support/Google/Chrome/Local State"
-STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/aerospace"
-STATE_FILE="$STATE_DIR/scenes"   # "<workspace>\t<scene name>" per line
-NL=$'\n'
-
-# --- scene bookkeeping ----------------------------------------------------
-# Remembering which workspaces this script opened is what makes closing safe:
-# a scene workspace can be emptied without a prompt, anything else can't.
-
-# remember_scene <workspace> <scene> <window-id>...
-#
-# The window ids matter. An earlier version recorded only the workspace, and
-# pruned an entry only once that workspace was completely empty -- so if the
-# scene's own windows were gone but you had since put your own there, the entry
-# survived and `close` destroyed them. That happened. Recording the ids means
-# close only ever touches windows the scene actually opened.
-remember_scene() {
-  mkdir -p "$STATE_DIR"
-  prune_scenes
-  local ws="$1" name="$2"; shift 2
-  local ids; ids="$(printf '%s,' "$@")"; ids="${ids%,}"
-  local tmp; tmp="$(mktemp)"
-  [ -f "$STATE_FILE" ] && grep -v "^$ws	" "$STATE_FILE" > "$tmp" 2>/dev/null
-  printf '%s\t%s\t%s\n' "$ws" "$name" "$ids" >> "$tmp"
-  mv "$tmp" "$STATE_FILE"
-}
-
-# Window ids a scene opened that are still open.
-#
-# The second argument is the list of live ids, for callers with more than one
-# workspace to check: prune_scenes walked every ledger row and this re-asked
-# AeroSpace for the same list each time, one round-trip per open scene.
-scene_live_windows() {   # <workspace> [live-ids]
-  local ws="$1" name ids alive="" id existing="${2:-}"
-  IFS=$'\t' read -r _ name ids < <(awk -F'\t' -v w="$ws" '$1==w{print;exit}' "$STATE_FILE" 2>/dev/null)
-  [ -n "${ids:-}" ] || return 0
-  [ -n "$existing" ] || existing="$($AEROSPACE list-windows --all --format '%{window-id}')"
-  for id in ${ids//,/ }; do
-    case "$NL$existing$NL" in *"$NL$id$NL"*) alive="$alive $id" ;; esac
-  done
-  printf '%s' "${alive# }"
-}
-
-forget_scene() {     # <workspace>
-  [ -f "$STATE_FILE" ] || return 0
-  local tmp; tmp="$(mktemp)"
-  grep -v "^$1	" "$STATE_FILE" > "$tmp" 2>/dev/null || true
-  mv "$tmp" "$STATE_FILE"
-}
-
-PREV_FILE="$STATE_DIR/scenes-previous"   # the ledger as it was before a restart
-
-# A ledger written before this boot describes the previous session: every
-# window in it went away with the machine, and the next prune would drop the
-# lot without anyone getting to see what was open.
-#
-# Move it aside once, the first time anything touches the ledger after a
-# restart, so `dot scene restore` still has something to offer. Keyed on the
-# boot clock rather than on the windows being gone, because "all its windows
-# are gone" is also what closing a scene by hand looks like.
-stage_previous_session() {
-  [ -s "$STATE_FILE" ] || return 0
-  local boot mtime
-  # "{ sec = 1785738856, usec = 84400 } Mon Aug  3 ...". Anchored on the
-  # opening brace: a greedy .* before "sec = " matches the *last* one, which is
-  # "usec = ", and hands back a boot time in 1970.
-  boot="$(sysctl -n kern.boottime 2>/dev/null | sed -n 's/^{ *sec *= *\([0-9][0-9]*\).*/\1/p')"
-  [ -n "$boot" ] || return 0
-  mtime="$(stat -f %m "$STATE_FILE" 2>/dev/null)"
-  [ -n "$mtime" ] || return 0
-  [ "$mtime" -lt "$boot" ] || return 0
-  mv "$STATE_FILE" "$PREV_FILE"
-  : > "$STATE_FILE"
-}
-
-# Drops entries whose windows are all gone.
-#
-# These three functions used to share one temp path, $STATE_FILE.tmp. Nothing
-# here runs concurrently on purpose, but remember_scene calls prune_scenes and
-# both then wrote and moved the same file; a failed mv left the ledger with a
-# duplicated line and "mv: scenes.tmp: No such file or directory" in the log.
-# mktemp each, so they cannot collide however they end up nested.
-#
-# That fix is also why there is no dedupe pass here any more. There was one,
-# and `for (w in line)` walks an awk hash in unspecified order -- so every
-# prune quietly reshuffled the ledger, and with it the order of `dot scene
-# list`, of what `dot scene restore` replays, and of which workspace a
-# first-match lookup calls "the" one for a scene. It was guarding against a
-# duplicate that mktemp had already made impossible.
-#
-# Keyed on the scene's *own* windows, not on the workspace having anything at
-# all: an entry that outlives its windows is how `close` ends up destroying
-# whatever you have since put there.
-prune_scenes() {
-  stage_previous_session
-  [ -f "$STATE_FILE" ] || return 0
-  local tmp ws name ids live; tmp="$(mktemp)"
-  live="$($AEROSPACE list-windows --all --format '%{window-id}' 2>/dev/null)"
-  while IFS=$'\t' read -r ws name ids; do
-    [ -n "${ws:-}" ] || continue
-    [ -n "$(scene_live_windows "$ws" "$live")" ] && printf '%s\t%s\t%s\n' "$ws" "$name" "$ids"
-  done < "$STATE_FILE" > "$tmp"
-  mv "$tmp" "$STATE_FILE"
-}
-
-scene_of() {         # <workspace> -> scene name, or empty
-  [ -f "$STATE_FILE" ] || return 0
-  awk -F'\t' -v w="$1" '$1 == w { print $2; exit }' "$STATE_FILE"
-}
 
 # --- list -----------------------------------------------------------------
 # Single source of truth for what scenes exist, so the launcher stays in sync.
@@ -135,28 +28,25 @@ scene_of() {         # <workspace> -> scene name, or empty
 # The merge, the tombstone rule and the cache all live in scenes-lib.sh, which
 # the bar sources too. SCENES_FILE is a materialised copy of the merged set so
 # the rest of this file can keep passing a path to jq.
-_SCENES_FILE=""
-scenes_file() {
-  if [ -z "$_SCENES_FILE" ]; then
-    _SCENES_FILE="$(mktemp)"
-    scenes_merged > "$_SCENES_FILE"
-  fi
-  printf '%s' "$_SCENES_FILE"
-}
-SCENES_FILE="$(scenes_file)"
+# Materialised once, here, rather than through a function: `V="$(f)"` runs f in
+# a subshell, so a variable it sets is lost to the parent -- which meant the
+# EXIT trap had nothing to remove and every run of this script leaked a temp
+# file. There were 380 of them.
+_SCENES_FILE="$(mktemp)"
 trap 'rm -f "$_SCENES_FILE"' EXIT
+scenes_merged > "$_SCENES_FILE"
+SCENES_FILE="$_SCENES_FILE"
 
 # Stage on demand and print what the previous session had, as
 # "<workspace>\t<scene>" per line. The capability needs this before anything
 # else has had a chance to prune, so it cannot wait for a prune to do it.
 if [ "${1:-}" = "--previous-session" ]; then
-  stage_previous_session
-  [ -f "$PREV_FILE" ] && cut -f1,2 "$PREV_FILE"
+  previous_session_rows
   exit 0
 fi
 
 if [ "${1:-}" = "--forget-previous" ]; then
-  rm -f "$PREV_FILE"
+  forget_previous_session
   exit 0
 fi
 
@@ -174,16 +64,7 @@ if [ "${1:-}" = "--list" ]; then
 fi
 
 if [ "${1:-}" = "--describe" ]; then
-  # "<scene>\t<short summary of its windows>", for the launcher's detail column.
-  jq -r '
-    to_entries[]
-    | .key + "\t" + ([ .value.windows[]
-        # Only a chrome spec holds several space-separated URLs. Trimming an
-        # app spec at the first space turned "T3 Code (Alpha)" into "T3".
-        | if startswith("app:") then sub("^app:"; "")
-          else sub("^chrome(-app)?:https?://(www\\.)?"; "")
-               | split(" ")[0] | split("/")[0] end ] | join(" + "))
-  ' "$SCENES_FILE" 2>/dev/null
+  scenes_summary_tsv
   exit 0
 fi
 

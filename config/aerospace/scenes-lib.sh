@@ -24,12 +24,13 @@ SCENES_LOCAL="$_SCENES_LIB_DIR/scenes.local.json"
 _SCENES_STATE="${XDG_STATE_HOME:-$HOME/.local/state}/aerospace"
 SCENES_CACHE="$_SCENES_STATE/scenes-merged.json"
 SCENES_DEFS_CACHE="$_SCENES_STATE/scenes-defs.tsv"
+SCENES_SUMMARY_CACHE="$_SCENES_STATE/scenes-summary.tsv"
 
-scenes_cache_clear() { rm -f "$SCENES_CACHE" "$SCENES_DEFS_CACHE"; }
+scenes_cache_clear() { rm -f "$SCENES_CACHE" "$SCENES_DEFS_CACHE" "$SCENES_SUMMARY_CACHE"; }
 
 # Rebuild both caches unless they are newer than everything they derive from.
 _scenes_refresh() {
-  [ -s "$SCENES_CACHE" ] && [ -f "$SCENES_DEFS_CACHE" ] \
+  [ -s "$SCENES_CACHE" ] && [ -f "$SCENES_DEFS_CACHE" ] && [ -f "$SCENES_SUMMARY_CACHE" ] \
     && [ ! "$SCENES_SHIPPED" -nt "$SCENES_CACHE" ] \
     && [ ! "$SCENES_LOCAL"   -nt "$SCENES_CACHE" ] \
     && [ ! "${BASH_SOURCE[0]}" -nt "$SCENES_CACHE" ] && return 0
@@ -44,12 +45,22 @@ _scenes_refresh() {
   fi
   [ -s "$tmp" ] || { rm -f "$tmp"; return 1; }
 
-  # The bar wants it as TSV and reads it on every workspace switch, so derive
-  # that here too rather than making the repaint path run jq.
-  local dtmp; dtmp="$(mktemp)"
+  # Two derived views, built here because both are read on latency paths: the
+  # bar wants TSV on every workspace switch, and the launcher wants the window
+  # summary on every ⌥space. Deriving them now means neither path runs jq.
+  local dtmp stmp; dtmp="$(mktemp)"; stmp="$(mktemp)"
   jq -r 'to_entries[] | ["D", .key, (.value.icon // ""), (.value.label // .key),
                          (.value.badge // "BLUE")] | @tsv' "$tmp" > "$dtmp" 2>/dev/null
-  mv "$tmp" "$SCENES_CACHE"; mv "$dtmp" "$SCENES_DEFS_CACHE"
+  jq -r '
+    to_entries[]
+    | .key + "\t" + ([ .value.windows[]
+        # Only a chrome spec holds several space-separated URLs. Trimming an
+        # app spec at the first space turned "T3 Code (Alpha)" into "T3".
+        | if startswith("app:") then sub("^app:"; "")
+          else sub("^chrome(-app)?:https?://(www\\.)?"; "")
+               | split(" ")[0] | split("/")[0] end ] | join(" + "))' \
+    "$tmp" > "$stmp" 2>/dev/null
+  mv "$tmp" "$SCENES_CACHE"; mv "$dtmp" "$SCENES_DEFS_CACHE"; mv "$stmp" "$SCENES_SUMMARY_CACHE"
 }
 
 # The merged definitions, as JSON.
@@ -58,3 +69,6 @@ scenes_merged() { _scenes_refresh && cat "$SCENES_CACHE" || echo '{}'; }
 # The merged definitions as "D<TAB>key<TAB>icon<TAB>label<TAB>badge", which is
 # exactly what the bar's single awk pass consumes.
 scenes_defs_tsv() { _scenes_refresh && cat "$SCENES_DEFS_CACHE"; }
+
+# "<scene><TAB><what its windows are>", for the launcher's detail column.
+scenes_summary_tsv() { _scenes_refresh && cat "$SCENES_SUMMARY_CACHE"; }

@@ -70,7 +70,7 @@ if [ -z "$NAME" ]; then
   # scene.sh --describe already emits "<name>\t<window summary>" -- the same
   # string the launcher shows against "Open scene". Deriving it again here is
   # how the two come to disagree the next time that expression is touched.
-  choice="$("$SCENE_SH" --describe 2>/dev/null \
+  choice="$( { _scenes_lib; scenes_summary_tsv; } 2>/dev/null \
     | while IFS=$'\t' read -r n summary; do
         printf '%s  %s\t%s\n' "$(printf '%s' "$DEFS" | jq -r --arg n "$n" '.[$n].icon // "·"')" \
                "$n" "$summary"
@@ -114,7 +114,7 @@ if [ -z "$RENAME$LABEL$ICON$BADGE$RATIO$QUIT" ]; then
     Delete)
       # The confirmation belongs here, where there is demonstrably a picker in
       # front of a person -- scene-delete cannot tell that from its own side.
-      open_on="$(awk -F'\t' -v s="$NAME" '$2 == s { print $1 }' "$LEDGER" 2>/dev/null | paste -sd ', ' -)"
+      open_on="$(_ledger_lib; workspaces_of "$NAME")"
       d="the definition only; no windows are closed"
       [ -n "$open_on" ] && d="open on workspace $open_on -- those windows stay, and stop being a scene"
       confirm "Delete the scene $NAME?" "Delete \"$NAME\"" "$d" || exit 0
@@ -158,11 +158,7 @@ if [ -n "$RENAME" ]; then
       '.[$new] = $obj | if $shipped then .[$old] = null else del(.[$old]) end'
     # An open scene is remembered by name; leaving the old one there would
     # blank its pill and make `dot scene close` stop recognising it.
-    if [ -f "$LEDGER" ]; then
-      led="$(mktemp)"
-      awk -F'\t' -v o="$NAME" -v n="$NEW" 'BEGIN{OFS="\t"} $2 == o { $2 = n } 1' \
-        "$LEDGER" > "$led" && mv "$led" "$LEDGER"
-    fi
+    _ledger_lib; ledger_rename_scene "$NAME" "$NEW"
     changed="$changed name"
     audit "scene edit $NAME renamed to $NEW"
     NAME="$NEW"
