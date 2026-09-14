@@ -4,9 +4,8 @@ Ideas, not commitments. Ordered by how much they'd change an ordinary day, not
 by how interesting they are to build.
 
 Each says roughly what it costs and — where it matters — what makes it safe.
-Nothing here is started.
-
-*Done and removed from this list: `dot scene save`.*
+Items are removed from this list when they ship, not ticked off: `dot scene
+save` and `dot window send` were both here.
 
 ---
 
@@ -14,15 +13,6 @@ Nothing here is started.
 
 The bar is: *does this remove a decision, a keystroke, or a trip into a config
 file?*
-
-### Send this window to a workspace, from the palette
-
-`⌥⇧<key>` already does it if you remember the letter. A palette entry —
-*"Send this window to…"*, then a workspace list showing what's already there —
-means never having to.
-
-*Small. `workspace-goto` already enumerates workspaces with their apps; this is
-that list bound to `move-node-to-workspace`.*
 
 ### Put apps where they belong, automatically
 

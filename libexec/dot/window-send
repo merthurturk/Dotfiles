@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+#
+# dot window send <workspace> [--follow]
+#
+# Sends the focused window to another workspace. The keybinding for this has
+# always existed -- ⌥⇧<key> -- but only if you remember which letter you put
+# things on. From the palette you get the list, with what is already there.
+#
+# Stays where you are, like the keybinding does: you are usually clearing space,
+# not going with it. --follow if you meant to follow.
+
+set -u
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+
+if [ "${1:-}" = "--describe" ]; then
+  # The window to send has to be read here, not after the picker opens: the
+  # palette takes focus, so "the focused window" stops being the user's the
+  # moment they press a key. menu exports what was focused before that.
+  wid="${DOT_ORIG_WID:-$($AEROSPACE list-windows --focused --format '%{window-id}' 2>/dev/null)}"
+  current="${DOT_ORIG_WS:-$($AEROSPACE list-workspaces --focused 2>/dev/null)}"
+
+  instances='[]'
+  if [ -n "$wid" ]; then
+    # Occupied workspaces, plus the first empty one. Listing all 30 would bury
+    # the palette in rows that are all the same row.
+    instances="$(
+      $AEROSPACE list-windows --monitor all --format '%{workspace}|%{app-name}' \
+        | sort -u \
+        | jq -R -s --arg cur "$current" \
+              --arg empty "$($AEROSPACE list-workspaces --monitor all --empty | head -1)" \
+              --arg state "$(cat "$STATE_DIR/scenes" 2>/dev/null)" '
+            ($state | split("\n") | map(select(length>0) | split("\t"))
+                    | map({(.[0]): .[1]}) | add // {}) as $scenes
+            | (split("\n") | map(select(length>0) | split("|"))
+               | group_by(.[0])
+               | map({ws: .[0][0], apps: (map(.[1]) | join(", "))})
+               | map(select(.ws != $cur)))
+              + (if $empty == "" then [] else [{ws: $empty, apps: "empty"}] end)
+            | map({label: ("Send this window to workspace " + .ws),
+                   detail: (if $scenes[.ws] then "scene: " + $scenes[.ws] else .apps end),
+                   args: [.ws]})')"
+  fi
+
+  jq -n --argjson instances "$instances" '{
+    id: "window.send",
+    summary: "Send the focused window to another workspace",
+    args: [{name: "workspace", required: true},
+           {name: "--follow", required: false, note: "go with it"}],
+    destructive: false,
+    verify: "dot window list",
+    undo: "dot window send <the workspace it came from>",
+    instances: $instances
+  }'
+  exit 0
+fi
+
+WS=""; FOLLOW=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --follow) FOLLOW="--focus-follows-window"; shift ;;
+    -*) echo "window send: unknown option $1" >&2; exit 1 ;;
+    *) [ -z "$WS" ] && WS="$1"; shift ;;
+  esac
+done
+[ -n "$WS" ] || { echo "usage: dot window send <workspace> [--follow]" >&2; exit 1; }
+
+# Same reason as above: by the time the palette has handed control back, focus
+# may have moved. Act on the window the user was looking at when they asked.
+WID="${DOT_ORIG_WID:-$($AEROSPACE list-windows --focused --format '%{window-id}' 2>/dev/null)}"
+[ -n "$WID" ] || { echo "window send: no focused window" >&2; exit 1; }
+
+audit "window send $WID -> $WS${FOLLOW:+ (follow)}"
+# shellcheck disable=SC2086  # $FOLLOW is a flag or empty, by construction
+exec $AEROSPACE move-node-to-workspace $FOLLOW --window-id "$WID" "$WS"
