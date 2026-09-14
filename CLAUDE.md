@@ -9,6 +9,7 @@ the four moving parts fit together and is the index for everything else.
 | Doc | For |
 |---|---|
 | [personas](docs/personas.md) | who this is for, and where it still falls short |
+| [backlog](docs/backlog.md) | what's next, ordered by daily impact |
 | [principles](docs/principles.md) | the rules, and what each one cost to learn |
 | [architecture](docs/architecture.md) | how it fits together, state files, symlinks |
 | [capabilities](docs/capabilities.md) | the `dot` surface, descriptors, adding one |

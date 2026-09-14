@@ -40,6 +40,7 @@ that remain. It is re-runnable: anything it would overwrite is moved to
 | Doc | For |
 |---|---|
 | [personas](docs/personas.md) | who this is for, and where it still falls short |
+| [backlog](docs/backlog.md) | what's next, ordered by daily impact |
 | [principles](docs/principles.md) | the rules, and what each one cost to learn |
 | [architecture](docs/architecture.md) | how the parts fit together |
 | [capabilities](docs/capabilities.md) | the `dot` surface |
