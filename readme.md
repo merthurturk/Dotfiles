@@ -205,6 +205,7 @@ dot scene open chill      dot scene list
 dot scene save work       dot scene restore
 dot scene last            dot scene move 5
 dot scene edit            dot scene close 3
+dot window geometry       # where windows actually are
 ```
 
 `dot scene save` is how you make one: arrange a workspace by hand, name it, and

@@ -32,7 +32,9 @@ if [ "${1:-}" = "--describe" ]; then
     args: [{name:"name", required:false, note:"asked for when omitted"},
            {name:"--rename", required:false}, {name:"--label", required:false},
            {name:"--icon", required:false}, {name:"--badge", required:false, choices:$badges},
-           {name:"--ratio", required:false}],
+           {name:"--ratio", required:false},
+           {name:"--quit", required:false, note:"quit apps the scene leaves with no windows"},
+           {name:"--no-quit", required:false}],
     destructive: false,
     guard: "writes only to scenes.local.json; the shipped scenes.json is never touched",
     verify: "dot scene list --json",
@@ -70,9 +72,11 @@ set_field() {  # <scene> <key> <json value>
 # colour is a poor way to choose a colour.
 repaint() { sketchybar --trigger aerospace_workspace_change >/dev/null 2>&1 || true; }
 
-NAME=""; RENAME=""; LABEL=""; ICON=""; BADGE=""; RATIO=""
+NAME=""; RENAME=""; LABEL=""; ICON=""; BADGE=""; RATIO=""; QUIT=""
 while [ $# -gt 0 ]; do
   case "$1" in
+    --quit)   QUIT=true;  shift ;;
+    --no-quit) QUIT=false; shift ;;
     --rename) RENAME="${2:-}"; shift 2 ;;
     --label)  LABEL="${2:-}";  shift 2 ;;
     --icon)   ICON="${2:-}";   shift 2 ;;
@@ -101,10 +105,11 @@ printf '%s' "$DEFS" | jq -e --arg n "$NAME" 'has($n)' >/dev/null 2>&1 \
   || { echo "scene edit: no scene '$NAME'" >&2; exit 1; }
 
 # Guided: nothing was asked for on the command line, so ask.
-if [ -z "$RENAME$LABEL$ICON$BADGE$RATIO" ]; then
+if [ -z "$RENAME$LABEL$ICON$BADGE$RATIO$QUIT" ]; then
   cur() { printf '%s' "$DEFS" | jq -r --arg n "$NAME" ".[\$n].$1 // \"\" | tostring"; }
-  field="$(printf 'Icon\t%s\nColour\t%s\nLabel\t%s\nName\t%s\nSplit\t%s\nDelete\tremove this scene\n' \
-             "$(cur icon)" "$(cur badge)" "$(cur label)" "$NAME" "$(cur ratio)" \
+  quit_now="$(printf '%s' "$DEFS" | jq -r --arg n "$NAME" 'if .[$n].quit then "yes" else "no" end')"
+  field="$(printf 'Icon\t%s\nColour\t%s\nLabel\t%s\nName\t%s\nSplit\t%s\nQuit apps on close\t%s\nDelete\tremove this scene\n' \
+             "$(cur icon)" "$(cur badge)" "$(cur label)" "$NAME" "$(cur ratio)" "$quit_now" \
            | pick "Change what about $NAME?" scene-edit-field | cut -f1)"
   case "$field" in
     Icon)
@@ -124,6 +129,11 @@ if [ -z "$RENAME$LABEL$ICON$BADGE$RATIO" ]; then
            | pick "How should $NAME split?" scene-ratio | cut -f2)"
       [ -n "$r" ] || exit 0
       RATIO="$r" ;;
+    "Quit apps on close")
+      q="$(printf 'Yes\tquit apps this scene leaves with no windows\nNo\tjust close the windows\n' \
+           | pick "Quit apps when $NAME closes?" scene-quit | cut -f1)"
+      [ -n "$q" ] || exit 0
+      QUIT="$([ "$q" = Yes ] && echo true || echo false)" ;;
     Delete)
       # The confirmation belongs here, where there is demonstrably a picker in
       # front of a person -- scene-delete cannot tell that from its own side.
@@ -147,6 +157,9 @@ if [ -n "$BADGE" ]; then
     *) echo "scene edit: no badge colour '$BADGE' (have:$BADGES)" >&2; exit 1 ;;
   esac
   set_field "$NAME" badge "$(jq -n --arg v "$BADGE" '$v')"; changed="$changed colour"
+fi
+if [ -n "$QUIT" ]; then
+  set_field "$NAME" quit "$QUIT"; changed="$changed quit-on-close"
 fi
 if [ -n "$RATIO" ]; then
   jq -n --argjson v "$RATIO" 'if $v > 0 and $v < 1 then . else error("range") end' >/dev/null 2>&1 \
@@ -187,4 +200,6 @@ fi
 audit "scene edit $NAME:$changed"
 repaint
 printf 'scene %s:%s updated\n' "$NAME" "$changed"
-merged | jq -r --arg n "$NAME" '.[$n] | "  \(.icon // "·") \(.label // $n)   badge \(.badge // "BLUE"), split \(.ratio // 0.5)"' --arg n "$NAME"
+merged | jq -r --arg n "$NAME" '.[$n] |
+  "  \(.icon // "·") \(.label // $n)   badge \(.badge // "BLUE"), split \(.ratio // 0.5)" +
+  (if .quit then ", quits its apps on close" else "" end)' 

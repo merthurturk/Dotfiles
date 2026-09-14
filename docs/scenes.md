@@ -26,6 +26,7 @@ Definitions live in `config/aerospace/scenes.json` — **data, not code**:
 | `icon` | Nerd Font glyph for the workspace pill |
 | `label` | short name for the bar; defaults to the key |
 | `badge` | `PEACH`/`TEAL`/`MAUVE`/`BLUE`/`GREEN` from the theme |
+| `quit` | quit the apps this scene leaves with no windows; default `false` |
 
 ## Window specs
 
@@ -140,6 +141,36 @@ until the workspace is visible. `dot scene move` switches first and resizes
 second. With `--stay` there is nothing to aim at, so the split is left alone
 rather than aimed at a parked layout — which is what made an earlier version
 land a 97/3 split.
+
+## Quitting the apps too
+
+Closing the messaging scene and leaving WhatsApp running is half a job. But
+closing the chill scene must never quit Chrome, because Chrome is also the
+window you have open on another workspace.
+
+Configuration cannot tell those apart on its own — it does not know what else
+you have open at the time. So the split is:
+
+- The **scene** says whether it tidies up after itself: `"quit": true`, off by
+  default. Set it from the launcher under *Edit a scene… → Quit apps on close*,
+  or with `dot scene edit messaging --quit`.
+- The **decision about each app** is made by looking. An app is quit only if
+  closing the scene left it with **no windows at all**, checked against both
+  AeroSpace's list and `CGWindowListCopyWindowInfo` — either one saying "still
+  open" leaves the app alone.
+
+That gets both cases right without being told, and it stays right on the day
+you happen to have a second WhatsApp window somewhere. Verified: a scene with
+`app:Ghostty` and `chrome:` quit Ghostty and left Chrome running, because Chrome
+had a window on another workspace.
+
+`dot scene close --quit` and `--no-quit` override the scene's setting for one
+close. Apps are quit by bundle id through AppleScript, which asks for
+Automation permission the first time for each app; if you decline, the close
+still happens and the app is left running with a note saying so.
+
+The palette says which scenes do this: *"Close scene: messaging · workspace 4 —
+and quits its apps"*.
 
 ## Splits and hidden workspaces
 

@@ -297,11 +297,66 @@ if [ "${1:-}" = "move" ]; then
   exit 0
 fi
 
+# --- quitting apps --------------------------------------------------------
+#
+# Closing the messaging scene and leaving WhatsApp running is half a job. But
+# closing the chill scene must never quit Chrome, because Chrome is also the
+# window you have open on another workspace.
+#
+# Configuration alone cannot tell those apart -- it does not know what else you
+# have open right now. So the scene only says *whether* it tidies up after
+# itself ("quit": true, off by default), and the decision about each app is made
+# by looking: quit it only if closing the scene left it with no windows at all.
+# That gets both cases right without being told, and it stays right on the day
+# you happen to have a second WhatsApp window somewhere.
+
+# Reads "<app-name>|<bundle-id>" per line on stdin; prints what it quit.
+# On stdin, not as arguments: app names have spaces in them, and "Google
+# Chrome|com.google.Chrome" splits into two useless words.
+quit_if_empty() {
+  local entry app bundle live quit_names=""
+  # Two independent views of what is still open. AeroSpace knows the windows it
+  # manages; CGWindowList sees every window there is, including ones AeroSpace
+  # does not tile. Either one saying "still open" is enough to leave the app
+  # alone -- the conservative direction is the safe one here.
+  live="$($AEROSPACE list-windows --monitor all --format '%{app-name}' 2>/dev/null)"
+  local geom="$DIR/bin/geometry"
+  [ -x "$geom" ] && live="$live
+$("$geom" 2>/dev/null | cut -f6)"
+
+  while IFS= read -r entry; do
+    app="${entry%%|*}"; bundle="${entry#*|}"
+    [ -n "$app" ] && [ -n "$bundle" ] || continue
+    printf '%s\n' "$live" | grep -qxF "$app" && continue
+    case " $quit_names " in *" $app "*) continue ;; esac
+    # By bundle id: an app can be renamed, and "tell application <name>" will
+    # happily go looking for a file by that name if no such app is running.
+    if osascript -e "tell application id \"$bundle\" to quit" >/dev/null 2>&1; then
+      quit_names="$quit_names $app"
+    else
+      echo "scene: could not quit $app -- grant Automation for it (dot doctor says where)" >&2
+    fi
+  done
+  printf '%s' "${quit_names# }"
+}
+
 if [ "${1:-}" = "close" ]; then
   shift
-  FORCE=0
-  if [ "${1:-}" = "--force" ]; then FORCE=1; shift; fi
-  WS="${1:-$($AEROSPACE list-workspaces --focused)}"
+  # Flags in any position: `close --force 5` and `close 5 --force` both read
+  # naturally, and guessing wrong about which one someone typed is a poor
+  # reason to silently ignore --no-quit.
+  FORCE=0; QUIT_OVERRIDE=""; WS=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --force)   FORCE=1 ;;
+      --quit)    QUIT_OVERRIDE=1 ;;
+      --no-quit) QUIT_OVERRIDE=0 ;;
+      -*) echo "scene: unknown option $1" >&2; exit 1 ;;
+      *) [ -z "$WS" ] && WS="$1" ;;
+    esac
+    shift
+  done
+  [ -n "$WS" ] || WS="$($AEROSPACE list-workspaces --focused)"
 
   NAME="$(scene_of "$WS")"
   if [ -z "$NAME" ] && [ "$FORCE" -eq 0 ]; then
@@ -332,10 +387,38 @@ if [ "${1:-}" = "close" ]; then
     exit 0
   fi
 
+  QUIT="${QUIT_OVERRIDE:-$(jq -r --arg s "$NAME" 'if .[$s].quit then 1 else 0 end' \
+                           "$SCENES_FILE" 2>/dev/null)}"
+  # Which apps these windows belong to, read before they are gone.
+  APPS=""
+  if [ "${QUIT:-0}" = "1" ]; then
+    APPS="$($AEROSPACE list-windows --monitor all \
+              --format '%{window-id}|%{app-name}|%{app-bundle-id}' 2>/dev/null \
+            | awk -F'|' -v ids="$(printf '%s' "$WIDS" | tr '\n' ' ')" '
+                BEGIN { n = split(ids, a, " "); for (i = 1; i <= n; i++) want[a[i]] = 1 }
+                want[$1] { print $2 "|" $3 }' | sort -u)"
+  fi
+
   printf '%s\n' "$WIDS" | while read -r wid; do
     [ -n "$wid" ] && $AEROSPACE close --window-id "$wid" 2>/dev/null
   done
   forget_scene "$WS"
+
+  if [ -n "$APPS" ]; then
+    # The windows have to be actually gone before asking whether any are left,
+    # and `close` returns before that.
+    for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+      still=0
+      for wid in $WIDS; do
+        $AEROSPACE list-windows --monitor all --format '%{window-id}' 2>/dev/null \
+          | grep -qx "$wid" && still=1
+      done
+      [ "$still" -eq 0 ] && break
+      sleep 0.04
+    done
+    quit="$(printf '%s\n' "$APPS" | quit_if_empty)"
+    [ -n "$quit" ] && echo "scene: quit $quit"
+  fi
   exit 0
 fi
 

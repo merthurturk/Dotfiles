@@ -3,22 +3,30 @@ set -u
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
 if [ "${1:-}" = "--describe" ]; then
-  jq -n --argjson instances "$(
+  jq -n --argjson quits "$("$DOT_ROOT/config/aerospace/scene.sh" --scenes-json 2>/dev/null \
+                          | jq -c 'with_entries(.value = (.value.quit // false))')" \
+        --argjson instances "$(
       "$DOT_ROOT/config/aerospace/scene.sh" --open-scenes 2>/dev/null \
-      | jq -R -s --arg kb "$(keysym "$(keybinding 'dot scene close')")" '
+      | jq -R -s '
           split("\n") | map(select(length>0)) | map(split("\t")) |
           map({label: ("Close scene: " + .[1]),
                detail: ("workspace " + .[0]),
+               scene: .[1],
                args: [.[0]]})')" '
     {
       id: "scene.close",
       summary: "Close every window on a scene'"'"'s workspace",
       args: [{name: "workspace", required: false},
-             {name: "--force", required: false}],
+             {name: "--force", required: false},
+             {name: "--quit", required: false, note: "quit apps left with no windows"},
+             {name: "--no-quit", required: false}],
       destructive: true,
       guard: "refuses any workspace the scene script did not open; --force overrides",
+      note: "a scene with \"quit\": true also quits the apps its windows were the last of",
       verify: "dot scene list --json",
-      instances: $instances
+      instances: ($instances | map(
+        (if $quits[.scene] then .detail + " — and quits its apps" else .detail end) as $d
+        | {label, detail: $d, args}))
     }'
   exit 0
 fi
