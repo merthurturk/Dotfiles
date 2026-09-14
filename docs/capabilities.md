@@ -65,7 +65,7 @@ that happened, and every scene claimed `⌥⇧space` including ones with no bind
 at all.
 
 ```sh
-kb="$(keysym "$(keybinding 'dot scene open')")"   # -> ⌥⇧space, or empty
+kb="$(keysym "$(keybinding "dot scene open $name")")"   # -> ⌥⇧space, or empty
 ```
 
 ## `DOT_ORIG_WS` / `DOT_ORIG_WID`
@@ -114,5 +114,26 @@ exec …
 Then `bin/check-capabilities.sh`. Nothing else to update — not the palette, not
 `dot help`, not the docs index.
 
-`_lib.sh` also gives you `audit`, which appends to
-`~/.local/state/aerospace/audit.log`. Anything that mutates state should call it.
+## What `_lib.sh` already does for you
+
+Reach for these before writing your own — most of them exist because the same
+few lines had been copy-pasted into four capabilities and the copies had
+started to differ.
+
+| | |
+|---|---|
+| `audit "…"` | append to `~/.local/state/aerospace/audit.log`. Anything that mutates state should call it |
+| `keybinding` / `keysym` | read the real binding out of `aerospace.toml` |
+| `scenes_json` | the merged `scenes.json` + `scenes.local.json`, cached |
+| `scene_exists <name>` | ask that, rather than re-deriving it |
+| `slug <text>` | a scene name you can still type on the command line |
+| `orig_ws` / `orig_wid` | what you were looking at *before* the palette took focus |
+| `pick` / `ask` / `confirm` | the picker, in its three shapes |
+| `workspace_rows <exclude>` | occupied workspaces plus the first empty one, annotated |
+| `json_update <file> <jq args…>` | atomic read-modify-write through `mktemp` |
+| `repaint` | nudge the bar so a change shows now, not on the next switch |
+
+Two things deliberately *not* there: `SCENES_JSON`, because the shipped file
+must never be read without the local one merged over it; and any helper that
+generates a whole descriptor, because that was tried and reverted —
+[principles](principles.md) has the reasoning.
