@@ -37,7 +37,6 @@ if [ "$SENDER" = "display_change" ]; then
 fi
 
 FOCUSED="${FOCUSED_WORKSPACE:-$(aerospace list-workspaces --focused)}"
-NL=$'\n'
 SCENES_STATE="${XDG_STATE_HOME:-$HOME/.local/state}/aerospace/scenes"
 
 # --- gather once ----------------------------------------------------------
@@ -76,27 +75,20 @@ SCENE_STATE=""
 # and putting the order in it means there is nothing extra to go stale, nothing
 # for scene-last to filter, and a scene keeps its place through a move.
 #
-# ledger_touch returns immediately unless the focused workspace is a scene and
-# is not already the most recent, so the common switch costs nothing.
+# ledger_touch returns 0 only when the order actually changed, which is exactly
+# "you have just arrived on a scene workspace you were not already on". That is
+# the gate for the reflow check below, and it matters: this plugin also runs on
+# a five-second poll, so anything gated merely on "the focused workspace is a
+# scene" would fork every five seconds, forever.
+#
+# Arriving is the first moment a workspace's layout is real, so it is the
+# moment to check the split is what the scene declared. --arrived is cheap when
+# there is nothing to do: one geometry read and a comparison. Not on
+# display_change -- the branch above already launched a full reflow.
 # shellcheck source=/dev/null
 source "$HOME/.config/aerospace/ledger-lib.sh"
-ledger_touch "$FOCUSED"
-
-# Drain a queued reflow the moment you arrive. A split cannot be applied to a
-# hidden workspace -- AeroSpace parks its windows off-screen rather than laying
-# them out -- so `dot window reflow` queues those and this is where they land.
-# Arriving is the first moment the geometry is real. Costs nothing when the
-# queue is empty, which is almost always.
-# Not on display_change: that branch above already launched a full reflow,
-# which covers every visible workspace. Draining here too would read a queue
-# the other process is still rewriting and race it on the same window.
-PENDING_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/aerospace/reflow-pending"
-if [ "$SENDER" != "display_change" ] && [ -s "$PENDING_FILE" ]; then
-  pending="$(<"$PENDING_FILE")"
-  case "$NL$pending$NL" in
-    *"$NL$FOCUSED$NL"*) ( "$HOME/.local/bin/dot" window reflow --now "$FOCUSED" \
-                          >/dev/null 2>&1 & ) ;;
-  esac
+if ledger_touch "$FOCUSED" && [ "$SENDER" != "display_change" ]; then
+  ( "$HOME/.local/bin/dot" window reflow --arrived "$FOCUSED" >/dev/null 2>&1 & )
 fi
 
 # "NAME=tint,edge,deep;…" so awk can look a badge up instead of forking.

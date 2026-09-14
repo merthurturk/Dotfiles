@@ -120,21 +120,25 @@ place_window() {
 
 # split_resize <window-id> <ratio>
 # Sizes that window to <ratio> of the two-tile area; its sibling takes the rest.
-split_resize() {
+# split_target <window-id> <ratio>
+#
+# The width this window should have, in points. Split out from split_resize so
+# it can be asked without being applied -- `dot window reflow --arrived` checks
+# whether a split is already right before touching anything.
+split_target() {
   local wid="$1" ratio="$2"
-  local outer_l outer_r inner_h mon mon_w tile_w target n
+  local outer_l outer_r inner_h mon mon_w tile_w n row
 
   # One enumeration, three answers. This used to ask AeroSpace separately for
   # the window's monitor, its workspace, and that workspace's window count --
-  # three round-trips (~57ms) for one row of one list. It runs once per scene
-  # on every reflow, every scene move and every queued drain.
-  local row
+  # three round-trips (~57ms) for one row of one list.
   row="$($AEROSPACE list-windows --all \
            --format '%{window-id}|%{workspace}|%{monitor-name}' 2>/dev/null \
          | awk -F'|' -v w="$wid" '
              $1 == w { ws = $2; mon = $3 }
              { count[$2]++ }
              END { if (ws != "") print ws "|" mon "|" count[ws] }')"
+  [ -n "$row" ] || return 1
   n="${row##*|}"; mon="${row%|*}"; mon="${mon#*|}"
 
   outer_l="$(_gap outer_left)"
@@ -151,8 +155,13 @@ split_resize() {
   # `resize width` sets the *node* width, which carries half the inner gap, so
   # the visible window lands INNER_H/2 narrower than asked. Measured at several
   # widths and confirmed constant; add it back.
-  target="$(awk -v w="$tile_w" -v r="$ratio" -v g="$inner_h" \
-                'BEGIN { printf "%d", w * r + 0.5 + g / 2 }')"
+  awk -v w="$tile_w" -v r="$ratio" -v g="$inner_h" \
+      'BEGIN { printf "%d", w * r + 0.5 + g / 2 }'
+}
+
+split_resize() {
+  local wid="$1" ratio="$2" target
+  target="$(split_target "$wid" "$ratio")" || return 1
 
   # `resize` refuses floating windows (AeroSpace issue #9), and an app can open
   # one floating without warning. It also refuses when the workspace has drifted

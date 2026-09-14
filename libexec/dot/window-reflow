@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# dot window reflow [--now <workspace>]
+# dot window reflow [--arrived <workspace>]
 #
 # Re-apply every open scene's declared ratio.
 #
@@ -13,29 +13,32 @@
 # re-applying it is honouring that declaration; a workspace you sized by hand is
 # left alone.
 #
-# What changed, and why there is a queue: this used to resize every scene
-# workspace immediately, on the belief that resize works fine on a hidden one.
-# It does not. AeroSpace gives a hidden workspace no real geometry at all -- its
-# windows sit parked off-screen at whatever size they last had -- so a resize
-# aimed at one is aimed at nothing. `dot window geometry` shows this plainly.
+# Only a workspace you are looking at can be reflowed. AeroSpace gives a hidden
+# one no real geometry at all -- its windows sit parked off-screen at whatever
+# size they last had -- so a resize aimed at one is aimed at nothing.
 #
-# So: the visible workspaces are reflowed now, and the rest are written to a
-# queue. The bar's workspace plugin drains it as you arrive, which is the first
-# moment the layout is real. You never see it happen.
+# The rest are fixed on arrival, by `--arrived`, which the bar calls when you
+# switch to a scene workspace. That used to be a queue file of workspaces this
+# command could not reach; measuring is better, because the queue only knew
+# about splits *this command* had given up on. A split that drifted for any
+# other reason -- a window closed, a display changed while the workspace was
+# hidden, an app that opened at its own size -- stayed wrong until something
+# happened to queue it. And a queue entry went stale in ways the ledger did
+# not: closing or moving the scene left it pointing at nothing.
+#
+# So there is no queue. On arrival, ask whether the split is already right and
+# do nothing if it is, which is the repo's own rule about verifying against the
+# world rather than keeping a note.
 
 set -u
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
-# shellcheck source=/dev/null
-source "$DOT_ROOT/config/aerospace/split-lib.sh"
-
 STATE_FILE="$STATE_DIR/scenes"
-PENDING="$STATE_DIR/reflow-pending"
 
 if [ "${1:-}" = "--describe" ]; then
   jq -n '{
     id: "window.reflow",
     summary: "Re-apply each open scene'"'"'s split for the current display",
-    args: [{name: "--now", required: false, note: "one workspace, when it becomes visible"}],
+    args: [{name: "--arrived", required: false, note: "one workspace, as you switch to it"}],
     destructive: false,
     verify: "dot window geometry",
     instances: [{label: "Reflow scene splits", detail: "after changing display", args: []}]
@@ -65,34 +68,43 @@ reflow_ws() {
 VISIBLE="$($AEROSPACE list-workspaces --monitor all --visible 2>/dev/null)"
 NL=$'\n'
 
-# --now: called by the bar when you arrive on a workspace that was queued.
-if [ "${1:-}" = "--now" ]; then
+visible() { case "$NL$VISIBLE$NL" in *"$NL$1$NL"*) return 0 ;; esac; return 1; }
+
+# --arrived: called by the bar as you switch to a workspace. Cheap when there
+# is nothing to do, which is almost always -- one geometry read and a
+# comparison, no resize, no AeroSpace mutation.
+if [ "${1:-}" = "--arrived" ]; then
   ws="${2:-}"
-  [ -n "$ws" ] || { echo "usage: dot window reflow --now <workspace>" >&2; exit 1; }
-  grep -qx "$ws" "$PENDING" 2>/dev/null || exit 0
-  case "$NL$VISIBLE$NL" in *"$NL$ws$NL"*) ;; *) exit 0 ;; esac
-  reflow_ws "$ws" && audit "window reflow --now $ws"
-  # Off the queue either way: a scene that cannot be resized now will not be
-  # resizable the next time you arrive either, and retrying forever is worse
-  # than not trying.
-  rest="$(mktemp)"; grep -vx "$ws" "$PENDING" > "$rest" 2>/dev/null; mv "$rest" "$PENDING"
+  [ -n "$ws" ] || { echo "usage: dot window reflow --arrived <workspace>" >&2; exit 1; }
+  _ledger_lib
+  name="$(scene_of "$ws")"; [ -n "$name" ] || exit 0
+  visible "$ws" || exit 0
+
+  ids="$(ids_of "$ws")"; main="${ids%%,*}"
+  case "$ids" in *,*) ;; *) exit 0 ;; esac      # a lone window has no split
+
+  # shellcheck source=/dev/null
+  source "$DOT_ROOT/config/aerospace/split-lib.sh"
+  target="$(split_target "$main" "$(ratio_for "$name")")" || exit 0
+  actual="$("$DOT_ROOT/config/aerospace/bin/geometry" 2>/dev/null \
+            | awk -F'\t' -v w="$main" '$1 == w { print $4; exit }')"
+  [ -n "$actual" ] || exit 0
+
+  # A point or two either way is rounding, not drift.
+  off=$(( actual > target ? actual - target : target - actual ))
+  [ "$off" -le 2 ] && exit 0
+
+  reflow_ws "$ws" && audit "window reflow --arrived $ws ($actual -> $target)"
   exit 0
 fi
 
-now=0; queued=0
-queue="$(mktemp)"
+now=0
 while IFS=$'\t' read -r ws name ids; do
   [ -n "${ws:-}" ] && [ -n "${ids:-}" ] || continue
-  case "$NL$VISIBLE$NL" in *"$NL$ws$NL"*)
-    reflow_ws "$ws" && now=$((now + 1)) ;;
-  *)
-    printf '%s\n' "$ws" >> "$queue"
-    queued=$((queued + 1)) ;;
-  esac
+  visible "$ws" || continue
+  reflow_ws "$ws" && now=$((now + 1))
 done < "$STATE_FILE"
-mv "$queue" "$PENDING"
 
-audit "window reflow ($now now, $queued queued)"
-[ $((now + queued)) -gt 0 ] \
-  && echo "reflowed $now scene(s); $queued queued until you next look at them"
+audit "window reflow ($now visible scene(s))"
+[ "$now" -gt 0 ] && echo "reflowed $now scene(s); the rest are checked as you switch to them"
 exit 0

@@ -28,7 +28,7 @@ TAB=$'\t'
 # survived and `close` destroyed them. That happened. Recording the ids means
 # close only ever touches windows the scene actually opened.
 remember_scene() {
-  mkdir -p "$STATE_DIR"
+  mkdir -p "$LEDGER_DIR"
   prune_scenes
   local ws="$1" name="$2"; shift 2
   local ids; ids="$(printf '%s,' "$@")"; ids="${ids%,}"
@@ -136,13 +136,17 @@ scene_of() {         # <workspace> -> scene name, or empty
 # and nothing written when the order would not change. The write is a rename,
 # so a crash cannot leave a half-written ledger -- which matters more here than
 # it did for a throwaway history file.
+# Returns 0 only when the order actually changed -- that is, when you have
+# just arrived somewhere new. Callers use it as the "did I arrive?" signal:
+# the bar's plugin also runs on a 5-second poll, and acting on every one of
+# those rather than on an actual switch is a fork every five seconds forever.
 ledger_touch() {          # <workspace>
-  [ -f "$STATE_FILE" ] || return 0
+  [ -f "$STATE_FILE" ] || return 1
   local rows last
   rows="$(<"$STATE_FILE")"
-  case "$NL$rows" in *"$NL$1$TAB"*) ;; *) return 0 ;; esac   # not a scene
+  case "$NL$rows" in *"$NL$1$TAB"*) ;; *) return 1 ;; esac   # not a scene
   last="${rows##*$NL}"
-  case "$last" in "$1$TAB"*) return 0 ;; esac                # already most recent
+  case "$last" in "$1$TAB"*) return 1 ;; esac                # already most recent
   { printf '%s\n' "$rows" | grep -v "^$1$TAB"
     printf '%s\n' "$rows" | grep "^$1$TAB"
   } > "$STATE_FILE.$$" && mv "$STATE_FILE.$$" "$STATE_FILE"

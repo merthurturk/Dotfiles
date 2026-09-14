@@ -185,10 +185,18 @@ and quits its apps"*.
 automatically when the displays change, because `resize width` takes absolute
 points and a split computed on a 1710pt laptop is wrong on a 2560pt monitor.
 
-It can only do that to a workspace you are looking at. The others are queued in
-`~/.local/state/aerospace/reflow-pending` and drained by the bar's workspace
-plugin as you arrive on them, which is the first moment their layout is real.
-You never see it happen.
+It can only do that to a workspace you are looking at: AeroSpace gives a hidden
+one no geometry, so a resize aimed at one is aimed at nothing.
+
+The rest are checked **on arrival**. Switching to a scene workspace asks whether
+its split is already what the scene declared, and does nothing if it is — one
+geometry read and a comparison, no resize. You never see it happen.
+
+That used to be a queue of workspaces reflow had given up on, which was worse in
+two ways: it only knew about splits *that command* had failed to apply, so a
+split that drifted for any other reason stayed wrong until something happened to
+queue it; and an entry went stale when the scene was closed or moved. Measuring
+has neither problem, and needs no file.
 
 `dot window geometry` shows you the difference, and is the tool to reach for
 whenever a split looks wrong:

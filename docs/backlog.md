@@ -23,24 +23,6 @@ efficiency, altitude) produced three commits of fixes. These are the findings
 that were **deliberately left** — each is a redesign rather than a cleanup, and
 each changes behaviour, so none belonged in a tidy-up pass.
 
-### Let the reflow queue go, and measure instead
-
-`dot window reflow` writes `~/.local/state/aerospace/reflow-pending` for the
-workspaces it cannot resize yet, and the bar drains it on arrival. But that
-file carries nothing the system doesn't already have: its contents are exactly
-*(ledger workspaces) ∖ (visible)*, and reflow reads both. Worse, the queue goes
-stale in ways the ledger doesn't — a queued workspace can be closed, or moved
-by `dot scene move` (the ledger row follows, the queue entry doesn't).
-
-`dot window geometry` now makes the better version possible: on arrival, ask
-whether this workspace's split *actually* matches its declared ratio and fix it
-only if not. That is self-healing, needs no file, and is the repo's own
-"verify against the world" rule applied to the one place still keeping a note
-instead of looking.
-
-*Medium. It also removes the bar plugin's knowledge of reflow's queue path,
-file format and private `--now` flag.*
-
 ### ~~One window snapshot for the whole palette~~ — measured, not worth it
 
 The estimate behind this was wrong. It is not thirty descriptors opening their
