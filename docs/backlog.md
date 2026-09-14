@@ -7,10 +7,102 @@ Each says roughly what it costs and — where it matters — what makes it safe.
 Items are removed from this list when they ship, not ticked off.
 
 **The Daily convenience section is empty**, which is the point of having had
-one. `dot scene save`, `dot scene edit`, `dot scene last`, `dot scene restore`,
-`dot window send`, `dot window pin` and `dot theme auto` were all in it. What is
-left below is distribution and platform work — worth doing, but none of it
-changes your Tuesday.
+one. `dot scene save`, `dot scene edit`, `dot scene move`, `dot scene last`,
+`dot scene restore`, `dot window send`, `dot window pin`, `dot window geometry`
+and `dot theme auto` were all in it.
+
+What is left is engineering depth, distribution and platform work. Worth doing;
+none of it changes your Tuesday.
+
+---
+
+## Found by review, not yet done
+
+A four-angle review of the scene/window work (reuse, simplification,
+efficiency, altitude) produced three commits of fixes. These are the findings
+that were **deliberately left** — each is a redesign rather than a cleanup, and
+each changes behaviour, so none belonged in a tidy-up pass.
+
+### Let the reflow queue go, and measure instead
+
+`dot window reflow` writes `~/.local/state/aerospace/reflow-pending` for the
+workspaces it cannot resize yet, and the bar drains it on arrival. But that
+file carries nothing the system doesn't already have: its contents are exactly
+*(ledger workspaces) ∖ (visible)*, and reflow reads both. Worse, the queue goes
+stale in ways the ledger doesn't — a queued workspace can be closed, or moved
+by `dot scene move` (the ledger row follows, the queue entry doesn't).
+
+`dot window geometry` now makes the better version possible: on arrival, ask
+whether this workspace's split *actually* matches its declared ratio and fix it
+only if not. That is self-healing, needs no file, and is the repo's own
+"verify against the world" rule applied to the one place still keeping a note
+instead of looking.
+
+*Medium. It also removes the bar plugin's knowledge of reflow's queue path,
+file format and private `--now` flag.*
+
+### Move the scene-focus history into the ledger
+
+`dot scene last` reads a second state file, written by the **bar's renderer**,
+holding state `scene.sh` owns. It can name a workspace whose scene is gone, so
+`scene-last` filters it back out against the ledger — and that filter is the
+symptom telling you the second file was never needed. Being keyed on workspace,
+it is also silently orphaned by `dot scene move`.
+
+The ledger is already one line per open scene, already pruned, already owned.
+A fourth column — last-focused epoch — would carry this, need no liveness
+filter, and follow a scene through a move for free.
+
+*Small, once the stamping happens somewhere that means "you arrived" rather
+than "the bar repainted" — `aerospace_workspace_change` is also fired by hover,
+by `theme set` and by `scene edit`.*
+
+### Give `scene.sh` the write side, not just the read side
+
+`scene.sh` owns *reading* the merged scenes; writing is still scattered.
+`scene-save`, `scene-edit` and `scene-delete` each write `scenes.local.json`,
+and the tombstone rule (`null` for a shipped scene, `del` for a local one) is
+spelled out twice. Five capabilities parse or rewrite the ledger's TSV with
+their own awk, so its column count is public API.
+
+`scene.sh --set <name> <json>`, `--delete <name>`, `--rename <old> <new>` and
+`--forget <name|workspace>` would put every one of those behind the file's
+owner.
+
+*Medium. `json_update` in `_lib.sh` already took the atomicity half of this.*
+
+### The bar still merges the scenes itself
+
+`config/sketchybar/plugins/aerospace.sh` has the fourth copy of the
+`scenes.json` + `scenes.local.json` merge, tombstone rule and all, with a
+comment naming `scene.sh` as the owner — which is the repo admitting the drift
+it is creating. Three other copies were removed; this one stayed because it is
+on the repaint path and calling out costs a process.
+
+The honest fix is `scene.sh --defs` emitting the exact `D\t<key>\t<icon>\t<label>\t<badge>`
+TSV the plugin already feeds to awk, which also deletes the plugin's
+`if -f local / else` fork.
+
+*Small, and it should be measured against the repaint budget before landing.*
+
+### One window snapshot for the whole palette
+
+Roughly thirty descriptors each open their own `aerospace` connection on every
+⌥space, several asking the identical question. `dot capabilities` could take
+the snapshot once and export it, the way `dot menu` already exports
+`DOT_ORIG_WS` and `DOT_ORIG_WID`.
+
+*Medium — it changes the descriptor contract, which is the one interface this
+project promises not to make complicated.*
+
+### Wake `theme auto` at sunset, not every ten minutes
+
+`sun_times` already yields the exact sunrise and sunset epochs, and the agent
+already rewrites its own plist on `on`. `StartCalendarInterval` at those two
+times is 2 wakeups a day instead of 144, and switches *at* dusk rather than up
+to ten minutes after it.
+
+*Small.*
 
 ---
 
