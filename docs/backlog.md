@@ -6,26 +6,14 @@ by how interesting they are to build.
 Each says roughly what it costs and — where it matters — what makes it safe.
 Nothing here is started.
 
+*Done and removed from this list: `dot scene save`.*
+
 ---
 
 ## Daily convenience
 
 The bar is: *does this remove a decision, a keystroke, or a trip into a config
 file?*
-
-### `dot scene save <name>` — capture what's open as a scene
-
-**The single biggest one.** Scenes are the best thing here and the only place
-you still edit JSON by hand. Arrange windows the way you like, run one command,
-and it writes the spec — apps, URLs, the ratio it can read from the current
-widths.
-
-Turns "I should make a work scene" from a five-minute detour into a five-second
-one, which is the difference between having three scenes and having twelve.
-
-*Medium. The ledger already records which windows belong to a scene; this is the
-same information going the other way. Chrome tabs are readable over AppleScript,
-native apps are just their name.*
 
 ### Send this window to a workspace, from the palette
 

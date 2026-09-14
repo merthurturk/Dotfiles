@@ -14,9 +14,17 @@ _gap() {
 
 # Visible width of the focused monitor. The aerospace CLI exposes no geometry
 # placeholders, so this comes from NSScreen, matched by name.
-_focused_monitor_width() {
+# _monitor_width [window-id]
+# Width of the monitor that window is on; the focused monitor when omitted.
+# Taking the focused one is wrong whenever the window being sized lives on a
+# workspace you are not looking at -- which is exactly what reflow does.
+_monitor_width() {
   local mon cache
-  mon="$($AEROSPACE list-monitors --focused --format '%{monitor-name}')"
+  if [ -n "${1:-}" ]; then
+    mon="$($AEROSPACE list-windows --all --format '%{window-id}|%{monitor-name}' \
+           | awk -F'|' -v w="$1" '$1 == w { print $2; exit }')"
+  fi
+  [ -n "${mon:-}" ] || mon="$($AEROSPACE list-monitors --focused --format '%{monitor-name}')"
 
   # Asking AppKit costs ~180ms, and this sits on the visible path of every
   # split. A monitor's width doesn't change while it's plugged in, so cache it
@@ -108,12 +116,17 @@ split_resize() {
   outer_l="$(_gap 'gaps\.outer\.left')"
   outer_r="$(_gap 'gaps\.outer\.right')"
   inner_h="$(_gap 'gaps\.inner\.horizontal')"
-  mon_w="$(_focused_monitor_width)"
+  mon_w="$(_monitor_width "$wid")"
 
   # Tiles share the row: an outer gap each side, and an inner gap between each
   # adjacent pair. Counting windows keeps this right with 3+ on the workspace,
   # not just the two-window case.
-  n="$($AEROSPACE list-windows --workspace focused --count)"
+  # Count the windows sharing this window's workspace, not the focused one --
+  # a split is computed for the layout the window is actually in.
+  local ws
+  ws="$($AEROSPACE list-windows --all --format '%{window-id}|%{workspace}' \
+        | awk -F'|' -v w="$wid" '$1 == w { print $2; exit }')"
+  n="$($AEROSPACE list-windows --workspace "${ws:-focused}" --count)"
   [ "${n:-0}" -lt 2 ] && n=2
   tile_w=$(( mon_w - outer_l - outer_r - inner_h * (n - 1) ))
 

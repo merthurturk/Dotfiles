@@ -100,8 +100,38 @@ a `git pull`. Same shape; only the keys you set are overridden:
 
 ## Adding one
 
-Add an entry to `scenes.json`, or to `scenes.local.json` to keep it to yourself. It reaches the palette immediately — `dot scene
-open --describe` enumerates the file. No code, and no second registration.
+Arrange a workspace the way you want it, then:
+
+```
+dot scene save work
+```
+
+It writes the spec into `scenes.local.json` and the scene is immediately
+openable. From the palette it is *"Save this workspace as a scene…"*, which
+asks for the name. Options: `--ratio` (default `0.6`), `--icon`, `--badge`,
+`--label`, and `--force` to replace an existing scene — without it, saving over
+one refuses.
+
+What it captures:
+
+| open window | saved as |
+|---|---|
+| any native app | `app:<App Name>` |
+| a Chrome window | `chrome:<every tab's URL>` |
+
+Windows are saved left to right, which is the order a scene reopens them in.
+
+Two things it does not guess. A Chrome `--app` window looks exactly like a
+one-tab window over AppleScript, so it is saved as `chrome:` — change it to
+`chrome-app:` by hand if you wanted the stripped-down panel. And the split
+ratio is not measured: AeroSpace does not report window frames, and reading
+them out of Accessibility costs a permission prompt and the best part of a
+second for a number you can type. Pass `--ratio`, or edit it after.
+
+You can also write an entry into `scenes.json` by hand, or into
+`scenes.local.json` to keep it to yourself. Either reaches the palette
+immediately — `dot scene open --describe` enumerates the file. No code, and no
+second registration.
 
 To bind it to a key, add to `aerospace.toml`:
 

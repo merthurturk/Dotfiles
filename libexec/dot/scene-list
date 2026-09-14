@@ -12,15 +12,21 @@ if [ "${1:-}" = "--describe" ]; then
   exit 0
 fi
 
+# scene.sh owns the scenes.json + scenes.local.json merge; ask it rather than
+# repeating it here, which is how a scene you saved could be missing from this
+# list while showing up in the launcher.
+defined_json="$("$DOT_ROOT/config/aerospace/scene.sh" --scenes-json 2>/dev/null | jq -c 'keys')"
+[ -n "$defined_json" ] || defined_json='[]'
+
 open_json="$("$DOT_ROOT/config/aerospace/scene.sh" --open-scenes 2>/dev/null \
   | jq -R -s 'split("\n") | map(select(length>0)) | map(split("\t"))
               | map({workspace: .[0], scene: .[1]})')"
 
 if [ "${1:-}" = "--json" ]; then
-  jq -n --argjson defined "$(jq -c 'keys' "$SCENES_JSON")" \
+  jq -n --argjson defined "$defined_json" \
         --argjson open "$open_json" '{defined: $defined, open: $open}'
 else
-  echo "defined:"; jq -r 'keys[] | "  " + .' "$SCENES_JSON"
+  echo "defined:"; printf '%s' "$defined_json" | jq -r '.[] | "  " + .' 
   echo "open:"
   printf '%s' "$open_json" | jq -r '.[] | "  workspace \(.workspace): \(.scene)"'
 fi

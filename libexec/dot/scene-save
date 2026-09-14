@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+#
+# dot scene save [name] [--ratio N] [--icon G] [--badge B] [--label L] [--force]
+#
+# Turns the workspace you are looking at into a scene. Arranging windows by hand
+# and then saving them is how anyone actually discovers a layout they like, and
+# this is the only part of scenes that still asked you to write JSON.
+#
+# Saves into scenes.local.json -- gitignored, merged over the shipped examples --
+# so what you capture is yours and survives a pull.
+#
+# Chrome windows are saved as `chrome:` with their tab URLs. A Chrome --app
+# window (no tab strip, what a narrow side panel wants) is indistinguishable
+# from a one-tab window over AppleScript, so it is not guessed at: change the
+# spec to `chrome-app:` by hand when that is what you meant.
+
+set -u
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+
+SCENES_LOCAL="$DOT_ROOT/config/aerospace/scenes.local.json"
+PICKER="$DOT_ROOT/config/aerospace/bin/picker"
+
+# Apps of the workspace being saved, for the descriptor and the prompt. The
+# menu computes descriptors before the picker takes focus, so `focused` is
+# still the workspace the user is looking at.
+current_apps() {
+  $AEROSPACE list-windows --workspace "${1:-focused}" --format '%{app-name}' 2>/dev/null \
+    | awk '!seen[$0]++' | paste -sd ' + ' -
+}
+
+if [ "${1:-}" = "--describe" ]; then
+  ws="${DOT_ORIG_WS:-$($AEROSPACE list-workspaces --focused 2>/dev/null)}"
+  apps="$(current_apps "$ws")"
+  jq -n --arg ws "$ws" --arg apps "$apps" '{
+    id: "scene.save",
+    summary: "Save the current workspace as a scene",
+    args: [{name:"name", required:false, note:"prompted for when omitted"},
+           {name:"--ratio", required:false, default:"0.6"},
+           {name:"--icon", required:false}, {name:"--badge", required:false},
+           {name:"--label", required:false}, {name:"--force", required:false}],
+    destructive: false,
+    guard: "will not replace an existing scene without --force, or without confirming",
+    verify: "dot scene list --json",
+    instances: (if $apps == "" then []
+                else [{label: "Save this workspace as a scene…",
+                       detail: $apps, args: []}] end)
+  }'
+  exit 0
+fi
+
+NAME=""; RATIO="0.6"; ICON="󰍹"; BADGE="BLUE"; LABEL=""; FORCE=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --ratio) RATIO="${2:-}"; shift 2 ;;
+    --icon)  ICON="${2:-}";  shift 2 ;;
+    --badge) BADGE="${2:-}"; shift 2 ;;
+    --label) LABEL="${2:-}"; shift 2 ;;
+    --force) FORCE=1; shift ;;
+    -*) echo "scene save: unknown option $1" >&2; exit 1 ;;
+    *) [ -z "$NAME" ] && NAME="$1"; shift ;;
+  esac
+done
+
+WS="${DOT_ORIG_WS:-$($AEROSPACE list-workspaces --focused)}"
+WINDOWS="$($AEROSPACE list-windows --workspace "$WS" --format '%{window-id}|%{app-name}')"
+[ -n "$WINDOWS" ] || { echo "scene save: workspace $WS has no windows to save" >&2; exit 1; }
+
+PROMPTED=0
+if [ -z "$NAME" ]; then
+  [ -x "$PICKER" ] || { echo "usage: dot scene save <name>" >&2; exit 1; }
+  NAME="$(PICKER_MODE=input PICKER_PROMPT="Name this scene ($(current_apps "$WS"))" \
+          "$PICKER" </dev/null)"
+  PROMPTED=1
+fi
+# Scene names address a scene on the command line, so keep them addressable.
+NAME="$(printf '%s' "$NAME" | tr '[:upper:] ' '[:lower:]-' | tr -cd 'a-z0-9._-')"
+[ -n "$NAME" ] || exit 0
+
+# Don't quietly replace something you already have. Ask the way you were asked:
+# a name that came from the picker gets a picker confirm, a name typed on the
+# command line gets a command-line refusal. Testing for a tty instead meant
+# every non-interactive run silently opened a panel nobody could see.
+EXISTS=0
+"$DOT_ROOT/config/aerospace/scene.sh" --scenes-json 2>/dev/null \
+  | jq -e --arg n "$NAME" 'has($n)' >/dev/null 2>&1 && EXISTS=1
+if [ "$EXISTS" -eq 1 ] && [ "$FORCE" -eq 0 ]; then
+  if [ "$PROMPTED" -eq 1 ]; then
+    ans="$(printf 'Replace "%s"\tthe scene already exists\nCancel\t\n' "$NAME" \
+           | PICKER_PROMPT="Scene '$NAME' already exists" PICKER_CONTEXT=confirm "$PICKER")"
+    case "$ans" in Replace*) ;; *) exit 0 ;; esac
+  else
+    echo "scene save: '$NAME' already exists. Use --force to replace it." >&2
+    exit 1
+  fi
+fi
+
+# Chrome tab URLs, one line per Chrome window, keyed by the active tab's title.
+# Chrome and AeroSpace both number windows, but not the same way, and neither
+# exposes the other's id -- the active tab title is the only handle they share.
+# AeroSpace decorates it ("<tab> - Google Chrome - <profile>"), so strip that
+# back off before matching. Two windows on the same page are indistinguishable
+# here; the first one wins, which for a scene is the same thing.
+CHROME=""
+if printf '%s\n' "$WINDOWS" | grep -q '|Google Chrome$'; then
+  CHROME="$(osascript -e 'tell application "Google Chrome"
+    set out to ""
+    repeat with w in windows
+      set u to ""
+      repeat with t in tabs of w
+        set u to u & (URL of t) & " "
+      end repeat
+      set out to out & (title of active tab of w) & "\t" & u & "\n"
+    end repeat
+    return out
+  end tell' 2>/dev/null)"
+fi
+
+# AeroSpace lists a workspace's windows in layout order, left to right -- checked
+# against their on-screen x positions -- so the specs come out in the order the
+# windows appear, which is the order a scene reopens them in.
+SPECS="$(
+  $AEROSPACE list-windows --workspace "$WS" --format '%{app-name}|%{window-title}' \
+  | while IFS='|' read -r app title; do
+      [ -n "$app" ] || continue
+      if [ "$app" = "Google Chrome" ]; then
+        base="${title% - Google Chrome*}"
+        urls="$(printf '%s\n' "$CHROME" \
+                | awk -F'\t' -v t="$base" '$1 == t { print $2; exit }' \
+                | sed 's/[[:space:]]*$//')"
+        if [ -n "$urls" ]; then printf 'chrome:%s\n' "$urls"; continue; fi
+      fi
+      printf 'app:%s\n' "$app"
+    done | jq -R -s 'split("\n") | map(select(length > 0))'
+)"
+
+COUNT="$(printf '%s' "$SPECS" | jq 'length')"
+[ "${COUNT:-0}" -gt 0 ] || { echo "scene save: nothing to save" >&2; exit 1; }
+[ -n "$LABEL" ] || LABEL="$NAME"
+
+[ -f "$SCENES_LOCAL" ] || echo '{}' > "$SCENES_LOCAL"
+tmp="$SCENES_LOCAL.tmp"
+jq --arg n "$NAME" --arg icon "$ICON" --arg label "$LABEL" --arg badge "$BADGE" \
+   --argjson ratio "$RATIO" --argjson windows "$SPECS" \
+   '. + {($n): {icon:$icon, label:$label, badge:$badge, ratio:$ratio, windows:$windows}}' \
+   "$SCENES_LOCAL" > "$tmp" && mv "$tmp" "$SCENES_LOCAL" || {
+     rm -f "$tmp"; echo "scene save: could not write $SCENES_LOCAL" >&2; exit 1; }
+
+audit "scene save $NAME ($COUNT window(s) from workspace $WS)"
+printf "saved scene '%s' from workspace %s:\n" "$NAME" "$WS"
+printf '%s' "$SPECS" | jq -r '.[] | "  " + .'
+printf '  ratio %s, badge %s  ->  %s\n' "$RATIO" "$BADGE" "${SCENES_LOCAL/#$HOME/~}"
+printf '  open it with: dot scene open %s\n' "$NAME"

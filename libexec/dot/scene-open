@@ -4,7 +4,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
 if [ "${1:-}" = "--describe" ]; then
   jq -n \
-    --argjson choices "$(jq -c 'keys' "$SCENES_JSON")" \
+    --argjson choices "$("$DOT_ROOT/config/aerospace/scene.sh" --scenes-json | jq -c 'keys')" \
     --argjson instances "$(
       "$DOT_ROOT/config/aerospace/scene.sh" --describe 2>/dev/null \
       | jq -R -s --arg kb "$(keysym "$(keybinding 'dot scene open')")" '

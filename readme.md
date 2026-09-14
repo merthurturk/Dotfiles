@@ -201,8 +201,12 @@ A scene is a named window layout opened onto a fresh workspace.
 
 ```sh
 dot scene open chill      dot scene list
-dot scene close 3         dot scene close --force 5
+dot scene save work       dot scene close 3
 ```
+
+`dot scene save` is how you make one: arrange a workspace by hand, name it, and
+it writes the spec — apps by name, Chrome windows with their tabs, in the order
+they sit on screen.
 
 | Scene | Windows |
 |---|---|

@@ -99,6 +99,14 @@ if [ -f "$DIR/scenes.local.json" ]; then
   fi
 fi
 
+# The merged set, for anything outside this file that needs to know what scenes
+# exist. A temp file would not outlive this process, so hand over the JSON --
+# one subprocess, and no second implementation of the merge to drift from.
+if [ "${1:-}" = "--scenes-json" ]; then
+  cat "$SCENES_FILE"
+  exit 0
+fi
+
 if [ "${1:-}" = "--list" ]; then
   jq -r 'keys[]' "$SCENES_FILE" 2>/dev/null
   exit 0
