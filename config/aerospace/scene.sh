@@ -21,6 +21,7 @@ source "$DIR/split-lib.sh"
 LOCAL_STATE="$HOME/Library/Application Support/Google/Chrome/Local State"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/aerospace"
 STATE_FILE="$STATE_DIR/scenes"   # "<workspace>\t<scene name>" per line
+NL=$'\n'
 
 # --- scene bookkeeping ----------------------------------------------------
 # Remembering which workspaces this script opened is what makes closing safe:
@@ -45,13 +46,17 @@ remember_scene() {
 }
 
 # Window ids a scene opened that are still open.
-scene_live_windows() {   # <workspace>
-  local ws="$1" name ids alive="" id
+#
+# The second argument is the list of live ids, for callers with more than one
+# workspace to check: prune_scenes walked every ledger row and this re-asked
+# AeroSpace for the same list each time, one round-trip per open scene.
+scene_live_windows() {   # <workspace> [live-ids]
+  local ws="$1" name ids alive="" id existing="${2:-}"
   IFS=$'\t' read -r _ name ids < <(awk -F'\t' -v w="$ws" '$1==w{print;exit}' "$STATE_FILE" 2>/dev/null)
   [ -n "${ids:-}" ] || return 0
-  local existing; existing="$($AEROSPACE list-windows --all --format '%{window-id}')"
+  [ -n "$existing" ] || existing="$($AEROSPACE list-windows --all --format '%{window-id}')"
   for id in ${ids//,/ }; do
-    printf '%s\n' "$existing" | grep -qx "$id" && alive="$alive $id"
+    case "$NL$existing$NL" in *"$NL$id$NL"*) alive="$alive $id" ;; esac
   done
   printf '%s' "${alive# }"
 }
@@ -109,10 +114,11 @@ stage_previous_session() {
 prune_scenes() {
   stage_previous_session
   [ -f "$STATE_FILE" ] || return 0
-  local tmp ws name ids; tmp="$(mktemp)"
+  local tmp ws name ids live; tmp="$(mktemp)"
+  live="$($AEROSPACE list-windows --all --format '%{window-id}' 2>/dev/null)"
   while IFS=$'\t' read -r ws name ids; do
     [ -n "${ws:-}" ] || continue
-    [ -n "$(scene_live_windows "$ws")" ] && printf '%s\t%s\t%s\n' "$ws" "$name" "$ids"
+    [ -n "$(scene_live_windows "$ws" "$live")" ] && printf '%s\t%s\t%s\n' "$ws" "$name" "$ids"
   done < "$STATE_FILE" > "$tmp"
   mv "$tmp" "$STATE_FILE"
 }
@@ -239,16 +245,12 @@ if [ "${1:-}" = "move" ]; then
   # opened them in. You may have rearranged them since, and a move should not
   # quietly reshuffle a layout you arranged by hand.
   #
-  # `|| [ -n "$wid" ]`: scene_live_windows prints its ids without a trailing
-  # newline, so read returns false on the last one -- which dropped the final
-  # window of every scene, leaving it behind and out of the ledger.
-  LIVE=""
-  while read -r wid || [ -n "$wid" ]; do
-    [ -n "$wid" ] && LIVE="$LIVE $wid"
-  done < <(scene_live_windows "$FROM" | tr ' ' '\n')
+  # scene_live_windows already returns them space-separated; splitting that on
+  # newlines and reading it back only created the chance to drop the last one.
+  LIVE=" $(scene_live_windows "$FROM") "
   MOVE_WIDS=()
   while read -r wid; do
-    case " $LIVE " in *" $wid "*) MOVE_WIDS+=("$wid") ;; esac
+    case "$LIVE" in *" $wid "*) MOVE_WIDS+=("$wid") ;; esac
   done < <($AEROSPACE list-windows --workspace "$FROM" --format '%{window-id}')
 
   if [ "${#MOVE_WIDS[@]}" -eq 0 ]; then
@@ -269,11 +271,11 @@ if [ "${1:-}" = "move" ]; then
   # eval returns when the commands are accepted, not when they have taken
   # effect, so wait for the windows to actually be on the target before
   # recording that they are.
-  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+  for _ in $(seq 1 20); do
     placed="$($AEROSPACE list-windows --workspace "$TARGET" --format '%{window-id}')"
     settled=1
     for wid in "${MOVE_WIDS[@]}"; do
-      printf '%s\n' "$placed" | grep -qx "$wid" || settled=0
+      case "$NL$placed$NL" in *"$NL$wid$NL"*) ;; *) settled=0 ;; esac
     done
     [ "$settled" -eq 1 ] && break
     sleep 0.02
@@ -422,9 +424,12 @@ if [ "${1:-}" = "close" ]; then
                 want[$1] { print $2 "|" $3 }' | sort -u)"
   fi
 
-  printf '%s\n' "$WIDS" | while read -r wid; do
-    [ -n "$wid" ] && $AEROSPACE close --window-id "$wid" 2>/dev/null
+  # One round-trip for the lot, the same way the open path batches placement.
+  batch=""
+  for wid in $WIDS; do
+    [ -n "$wid" ] && batch="$batch${batch:+; }close --window-id $wid"
   done
+  [ -n "$batch" ] && $AEROSPACE eval "$batch" >/dev/null 2>&1
   forget_scene "$WS"
 
   if [ -n "$APPS" ]; then
@@ -432,11 +437,14 @@ if [ "${1:-}" = "close" ]; then
     # and `close` returns before that. Up to two seconds: an app is entitled to
     # take a moment over closing a window, and quitting it early would be
     # deciding on stale information.
+    # One enumeration per tick, tested against every id -- not one enumeration
+    # per id per tick, which was up to 150 round-trips over two seconds and
+    # saturated the same socket the closes were travelling on.
     for _ in $(seq 1 50); do
+      open_now="$($AEROSPACE list-windows --monitor all --format '%{window-id}' 2>/dev/null)"
       still=0
       for wid in $WIDS; do
-        $AEROSPACE list-windows --monitor all --format '%{window-id}' 2>/dev/null \
-          | grep -qx "$wid" && still=1
+        case "$NL$open_now$NL" in *"$NL$wid$NL"*) still=1 ;; esac
       done
       [ "$still" -eq 0 ] && break
       sleep 0.04
@@ -501,11 +509,12 @@ fi
 # SCENE_WS asks for a particular one -- `dot scene restore` uses it to put a
 # scene back where it was before the reboot -- but only if it is empty. A
 # preference cannot be allowed to override the one rule that keeps this safe.
+EMPTY="$($AEROSPACE list-workspaces --monitor all --empty)"
 WS=""
 if [ -n "${SCENE_WS:-}" ]; then
-  $AEROSPACE list-workspaces --monitor all --empty | grep -qx "$SCENE_WS" && WS="$SCENE_WS"
+  case "$NL$EMPTY$NL" in *"$NL$SCENE_WS$NL"*) WS="$SCENE_WS" ;; esac
 fi
-[ -n "$WS" ] || WS="$($AEROSPACE list-workspaces --monitor all --empty | head -1)"
+[ -n "$WS" ] || WS="$(printf '%s\n' "$EMPTY" | head -1)"
 if [ -z "$WS" ]; then
   echo "scene: no empty workspace available" >&2
   exit 1
@@ -573,12 +582,20 @@ for spec in "${WINDOWS[@]}"; do
   WIDS+=("$wid")
 done
 
-if [ "${#WIDS[@]}" -ge 2 ]; then
-  split_resize "${WIDS[0]}" "$RATIO"
-fi
 # Land on the scene. The switch at the top does not stick while the workspace is
 # still empty -- focus falls back to the previous window -- and a launching app
 # steals focus again as it comes up. Assert it once more now that the windows
 # are here and settled.
 $AEROSPACE eval "workspace $WS; focus --window-id ${WIDS[0]}" >/dev/null 2>&1 || true
+
+# The split goes last, and only once the workspace is actually the one on
+# screen. AeroSpace gives a workspace no real geometry until it is showing, so
+# a resize issued before that assertion lands on parked windows and sticks
+# there: a 60/40 scene opened as 1852/626 on a 1710pt display, reproducibly,
+# and came out exactly 1008/672 when the identical call was made a moment
+# later. `dot scene move` had the same ordering bug and the same fix.
+if [ "${#WIDS[@]}" -ge 2 ]; then
+  sleep 0.15
+  split_resize "${WIDS[0]}" "$RATIO"
+fi
 remember_scene "$WS" "$SCENE" "${WIDS[@]}"

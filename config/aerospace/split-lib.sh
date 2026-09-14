@@ -6,25 +6,35 @@ AEROSPACE=/opt/homebrew/bin/aerospace
 AEROSPACE_CONFIG="$HOME/.aerospace.toml"
 
 # Read an integer gap out of ~/.aerospace.toml, defaulting to 0.
+# The three gaps a split needs, read in one pass. Each used to be its own
+# sed+head over the same file: six forks for three numbers.
+_GAPS=""
 _gap() {
+  [ -n "$_GAPS" ] || _GAPS="$(sed -n \
+    -e 's/^gaps\.outer\.left[[:space:]]*=[[:space:]]*\([0-9][0-9]*\).*/outer_left \1/p' \
+    -e 's/^gaps\.outer\.right[[:space:]]*=[[:space:]]*\([0-9][0-9]*\).*/outer_right \1/p' \
+    -e 's/^gaps\.inner\.horizontal[[:space:]]*=[[:space:]]*\([0-9][0-9]*\).*/inner_horizontal \1/p' \
+    "$AEROSPACE_CONFIG" 2>/dev/null)"
   local v
-  v="$(sed -n "s/^$1[[:space:]]*=[[:space:]]*\([0-9][0-9]*\).*/\1/p" "$AEROSPACE_CONFIG" | head -1)"
+  v="$(printf '%s\n' "$_GAPS" | awk -v k="$1" '$1 == k { print $2; exit }')"
   echo "${v:-0}"
 }
 
 # Visible width of the focused monitor. The aerospace CLI exposes no geometry
 # placeholders, so this comes from NSScreen, matched by name.
-# _monitor_width [window-id]
-# Width of the monitor that window is on; the focused monitor when omitted.
-# Taking the focused one is wrong whenever the window being sized lives on a
-# workspace you are not looking at -- which is exactly what reflow does.
-_monitor_width() {
+# _monitor_width_for [monitor-name]
+# Width of that monitor; the focused one when the name is empty.
+#
+# The caller passes the name because it already knows it: split_resize reads
+# the window's monitor, workspace and neighbour count out of one enumeration.
+# Looking the monitor up again in here was a second round-trip over the same
+# list. Taking the *focused* monitor instead would be wrong whenever the window
+# being sized is on a workspace you are not looking at -- which is exactly what
+# reflow does.
+_monitor_width_for() {
   local mon cache
-  if [ -n "${1:-}" ]; then
-    mon="$($AEROSPACE list-windows --all --format '%{window-id}|%{monitor-name}' \
-           | awk -F'|' -v w="$1" '$1 == w { print $2; exit }')"
-  fi
-  [ -n "${mon:-}" ] || mon="$($AEROSPACE list-monitors --focused --format '%{monitor-name}')"
+  mon="${1:-}"
+  [ -n "$mon" ] || mon="$($AEROSPACE list-monitors --focused --format '%{monitor-name}')"
 
   # Asking AppKit costs ~180ms, and this sits on the visible path of every
   # split. A monitor's width doesn't change while it's plugged in, so cache it
@@ -112,21 +122,29 @@ place_window() {
 # Sizes that window to <ratio> of the two-tile area; its sibling takes the rest.
 split_resize() {
   local wid="$1" ratio="$2"
-  local outer_l outer_r inner_h mon_w tile_w target n
-  outer_l="$(_gap 'gaps\.outer\.left')"
-  outer_r="$(_gap 'gaps\.outer\.right')"
-  inner_h="$(_gap 'gaps\.inner\.horizontal')"
-  mon_w="$(_monitor_width "$wid")"
+  local outer_l outer_r inner_h mon mon_w tile_w target n
+
+  # One enumeration, three answers. This used to ask AeroSpace separately for
+  # the window's monitor, its workspace, and that workspace's window count --
+  # three round-trips (~57ms) for one row of one list. It runs once per scene
+  # on every reflow, every scene move and every queued drain.
+  local row
+  row="$($AEROSPACE list-windows --all \
+           --format '%{window-id}|%{workspace}|%{monitor-name}' 2>/dev/null \
+         | awk -F'|' -v w="$wid" '
+             $1 == w { ws = $2; mon = $3 }
+             { count[$2]++ }
+             END { if (ws != "") print ws "|" mon "|" count[ws] }')"
+  n="${row##*|}"; mon="${row%|*}"; mon="${mon#*|}"
+
+  outer_l="$(_gap outer_left)"
+  outer_r="$(_gap outer_right)"
+  inner_h="$(_gap inner_horizontal)"
+  mon_w="$(_monitor_width_for "$mon")"
 
   # Tiles share the row: an outer gap each side, and an inner gap between each
   # adjacent pair. Counting windows keeps this right with 3+ on the workspace,
   # not just the two-window case.
-  # Count the windows sharing this window's workspace, not the focused one --
-  # a split is computed for the layout the window is actually in.
-  local ws
-  ws="$($AEROSPACE list-windows --all --format '%{window-id}|%{workspace}' \
-        | awk -F'|' -v w="$wid" '$1 == w { print $2; exit }')"
-  n="$($AEROSPACE list-windows --workspace "${ws:-focused}" --count)"
   [ "${n:-0}" -lt 2 ] && n=2
   tile_w=$(( mon_w - outer_l - outer_r - inner_h * (n - 1) ))
 
@@ -140,9 +158,9 @@ split_resize() {
   # one floating without warning. It also refuses when the workspace has drifted
   # into an accordion root, which has happened twice here without anyone asking
   # for it. A split is by definition a tiles layout, so assert both -- each is a
-  # no-op when already true.
-  $AEROSPACE layout --window-id "$wid" tiling >/dev/null 2>&1 || true
-  $AEROSPACE layout --window-id "$wid" tiles  >/dev/null 2>&1 || true
+  # no-op when already true, and both fit in one round-trip.
+  $AEROSPACE eval "layout --window-id $wid tiling; layout --window-id $wid tiles" \
+    >/dev/null 2>&1 || true
 
   if ! $AEROSPACE resize --window-id "$wid" width "$target" 2>/dev/null; then
     echo "split: couldn't resize window $wid -- it may be alone on its workspace" >&2
