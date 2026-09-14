@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 #
+# dot window reflow [--now <workspace>]
+#
 # Re-apply every open scene's declared ratio.
 #
 # `resize width` takes absolute points, so a split computed on one display is
@@ -10,47 +12,85 @@
 # Only scene workspaces are touched. Their ratio is declared in scenes.json, so
 # re-applying it is honouring that declaration; a workspace you sized by hand is
 # left alone.
+#
+# What changed, and why there is a queue: this used to resize every scene
+# workspace immediately, on the belief that resize works fine on a hidden one.
+# It does not. AeroSpace gives a hidden workspace no real geometry at all -- its
+# windows sit parked off-screen at whatever size they last had -- so a resize
+# aimed at one is aimed at nothing. `dot window geometry` shows this plainly.
+#
+# So: the visible workspaces are reflowed now, and the rest are written to a
+# queue. The bar's workspace plugin drains it as you arrive, which is the first
+# moment the layout is real. You never see it happen.
 
 set -u
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 # shellcheck source=/dev/null
 source "$DOT_ROOT/config/aerospace/split-lib.sh"
 
+STATE_FILE="$STATE_DIR/scenes"
+PENDING="$STATE_DIR/reflow-pending"
+
 if [ "${1:-}" = "--describe" ]; then
   jq -n '{
     id: "window.reflow",
     summary: "Re-apply each open scene'"'"'s split for the current display",
-    args: [],
+    args: [{name: "--now", required: false, note: "one workspace, when it becomes visible"}],
     destructive: false,
-    verify: "dot window list --json",
+    verify: "dot window geometry",
     instances: [{label: "Reflow scene splits", detail: "after changing display", args: []}]
   }'
   exit 0
 fi
 
-STATE_FILE="$STATE_DIR/scenes"
-[ -f "$STATE_FILE" ] || exit 0
-
-SCENES_JSON="$DOT_ROOT/config/aerospace/scenes.json"
-SCENES_LOCAL="$DOT_ROOT/config/aerospace/scenes.local.json"
-
+# scene.sh owns the scenes.json + scenes.local.json merge, tombstones included.
+# This file used to carry its own copy of it, which is how a third one comes to
+# disagree with the other two.
 ratio_for() {
-  if [ -f "$SCENES_LOCAL" ]; then
-    jq -s -r --arg s "$1" '.[0] * .[1] | .[$s].ratio // 0.5' "$SCENES_JSON" "$SCENES_LOCAL" 2>/dev/null
-  else
-    jq -r --arg s "$1" '.[$s].ratio // 0.5' "$SCENES_JSON" 2>/dev/null
-  fi
+  "$DOT_ROOT/config/aerospace/scene.sh" --scenes-json 2>/dev/null \
+    | jq -r --arg s "$1" '.[$s].ratio // 0.5'
 }
 
-touched=0
+# reflow_ws <workspace> -> 0 if it was resized
+reflow_ws() {
+  local ws="$1" name ids main
+  IFS=$'\t' read -r _ name ids < <(awk -F'\t' -v w="$ws" '$1 == w { print; exit }' "$STATE_FILE" 2>/dev/null)
+  [ -n "${ids:-}" ] || return 1
+  main="${ids%%,*}"
+  split_resize "$main" "$(ratio_for "$name")" >/dev/null 2>&1
+}
 
-# resize works on a hidden workspace, so this never switches anything -- which
-# is what makes it safe to run automatically when the display changes.
+[ -f "$STATE_FILE" ] || exit 0
+VISIBLE="$($AEROSPACE list-workspaces --monitor all --visible 2>/dev/null)"
+
+# --now: called by the bar when you arrive on a workspace that was queued.
+if [ "${1:-}" = "--now" ]; then
+  ws="${2:-}"
+  [ -n "$ws" ] || { echo "usage: dot window reflow --now <workspace>" >&2; exit 1; }
+  grep -qx "$ws" "$PENDING" 2>/dev/null || exit 0
+  printf '%s\n' "$VISIBLE" | grep -qx "$ws" || exit 0
+  reflow_ws "$ws" && audit "window reflow --now $ws"
+  # Off the queue either way: a scene that cannot be resized now will not be
+  # resizable the next time you arrive either, and retrying forever is worse
+  # than not trying.
+  grep -vx "$ws" "$PENDING" > "$PENDING.tmp" 2>/dev/null; mv "$PENDING.tmp" "$PENDING"
+  exit 0
+fi
+
+now=0; queued=0
+: > "$PENDING.new"
 while IFS=$'\t' read -r ws name ids; do
   [ -n "${ws:-}" ] && [ -n "${ids:-}" ] || continue
-  main="${ids%%,*}"
-  split_resize "$main" "$(ratio_for "$name")" >/dev/null 2>&1 && touched=$((touched + 1))
+  if printf '%s\n' "$VISIBLE" | grep -qx "$ws"; then
+    reflow_ws "$ws" && now=$((now + 1))
+  else
+    printf '%s\n' "$ws" >> "$PENDING.new"
+    queued=$((queued + 1))
+  fi
 done < "$STATE_FILE"
-audit "window reflow ($touched scene(s))"
-[ "$touched" -gt 0 ] && echo "reflowed $touched scene(s)"
+mv "$PENDING.new" "$PENDING"
+
+audit "window reflow ($now now, $queued queued)"
+[ $((now + queued)) -gt 0 ] \
+  && echo "reflowed $now scene(s); $queued queued until you next look at them"
 exit 0

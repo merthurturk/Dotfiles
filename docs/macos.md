@@ -240,10 +240,17 @@ fullscreen when that is genuinely what you want (a video, say).
   visible window lands `inner_gap/2` narrower than asked. `split-lib.sh` adds it
   back. It is also **absolute points**, so a split is wrong on a different-sized
   display and nothing re-flows it; `dot window reflow` restores the ratio.
-- **`resize` works on a hidden workspace**, which is what lets reflow fix every
-  scene without switching to any of them.
+- **A hidden workspace has no geometry.** Its windows sit parked off-screen at
+  whatever size they last had — two windows of a 60/40 scene measured 1852pt
+  and 626pt on a 1710pt display while hidden. So a `resize` aimed at one is
+  aimed at nothing. This file used to claim the opposite, which is why
+  `dot window reflow` spent a long time appearing to work; it now reflows the
+  visible workspaces and queues the rest for the moment you arrive on them.
+  `dot window geometry` is what made this visible.
 - **No geometry in the CLI.** `%{monitor-width}` doesn't parse; monitor size
-  comes from `NSScreen`, matched by name.
+  comes from `NSScreen`, matched by name. Window frames come from
+  `CGWindowListCopyWindowInfo`, which needs no permission and whose
+  `kCGWindowNumber` is the same id AeroSpace uses.
 - **`[exec]` must be the last table in `aerospace.toml`** — a TOML table
   captures every key after it. It sets `PATH`, because GUI apps launched at
   login inherit a bare launchd `PATH` with no Homebrew.

@@ -37,6 +37,7 @@ if [ "$SENDER" = "display_change" ]; then
 fi
 
 FOCUSED="${FOCUSED_WORKSPACE:-$(aerospace list-workspaces --focused)}"
+NL=$'\n'
 SCENES_STATE="${XDG_STATE_HOME:-$HOME/.local/state}/aerospace/scenes"
 SCENES_JSON="$HOME/.config/aerospace/scenes.json"
 
@@ -89,6 +90,20 @@ case "$SCENE_STATE" in
     [ "$prev" = "$FOCUSED" ] || printf '%s\n%s\n' "$FOCUSED" "$prev" > "$HIST"
     ;;
 esac
+
+# Drain a queued reflow the moment you arrive. A split cannot be applied to a
+# hidden workspace -- AeroSpace parks its windows off-screen rather than laying
+# them out -- so `dot window reflow` queues those and this is where they land.
+# Arriving is the first moment the geometry is real. Costs nothing when the
+# queue is empty, which is almost always.
+PENDING_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/aerospace/reflow-pending"
+if [ -s "$PENDING_FILE" ]; then
+  pending="$(<"$PENDING_FILE")"
+  case "$NL$pending$NL" in
+    *"$NL$FOCUSED$NL"*) ( "$HOME/.local/bin/dot" window reflow --now "$FOCUSED" \
+                          >/dev/null 2>&1 & ) ;;
+  esac
+fi
 
 # "NAME=tint,edge,deep;…" so awk can look a badge up instead of forking.
 BADGES=""

@@ -141,6 +141,27 @@ second. With `--stay` there is nothing to aim at, so the split is left alone
 rather than aimed at a parked layout — which is what made an earlier version
 land a 97/3 split.
 
+## Splits and hidden workspaces
+
+`dot window reflow` re-applies every open scene's declared ratio — it runs
+automatically when the displays change, because `resize width` takes absolute
+points and a split computed on a 1710pt laptop is wrong on a 2560pt monitor.
+
+It can only do that to a workspace you are looking at. The others are queued in
+`~/.local/state/aerospace/reflow-pending` and drained by the bar's workspace
+plugin as you arrive on them, which is the first moment their layout is real.
+You never see it happen.
+
+`dot window geometry` shows you the difference, and is the tool to reach for
+whenever a split looks wrong:
+
+```
+id       ws        x      y   width  height  app
+137387   1         10     50    1690    1051  T3 Code (Alpha)
+136980   2   ·   1709   1066    1690    1051  Google Chrome
+  (· = on a hidden workspace: parked, not laid out)
+```
+
 ## Bouncing between two
 
 ```sh
