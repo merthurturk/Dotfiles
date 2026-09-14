@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+#
+# dot scene last -- bounce to the scene you were in before this one.
+#
+# ⌥tab does this for workspaces. Scenes are the thing you actually move between,
+# and they are not where AeroSpace's back-and-forth leaves you once you have
+# visited an ordinary workspace in between.
+#
+# The history is written by the bar's workspace plugin, which already knows the
+# focused workspace and already has the scene ledger in memory.
+
+set -u
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+
+HIST="$STATE_DIR/scene-focus"
+LEDGER="$STATE_DIR/scenes"
+
+# The most recently focused scene workspace that isn't the one you are on, and
+# is still running a scene. A closed scene leaves its entry behind in the
+# history; the ledger is what decides whether it is real.
+target() {
+  local cur="$1" ws
+  [ -f "$HIST" ] || return 1
+  while IFS= read -r ws; do
+    [ -n "$ws" ] || continue
+    [ "$ws" = "$cur" ] && continue
+    awk -F'\t' -v w="$ws" '$1 == w { found = 1 } END { exit !found }' "$LEDGER" 2>/dev/null \
+      && { printf '%s' "$ws"; return 0; }
+  done < "$HIST"
+  return 1
+}
+
+if [ "${1:-}" = "--describe" ]; then
+  cur="${DOT_ORIG_WS:-$($AEROSPACE list-workspaces --focused 2>/dev/null)}"
+  ws="$(target "$cur")" || ws=""
+  name="$(awk -F'\t' -v w="$ws" '$1 == w { print $2; exit }' "$LEDGER" 2>/dev/null)"
+  jq -n --arg ws "$ws" --arg name "$name" \
+        --arg kb "$(keysym "$(keybinding 'dot scene last')")" '{
+    id: "scene.last",
+    summary: "Go back to the scene you were in before this one",
+    args: [],
+    destructive: false,
+    verify: "dot scene list",
+    instances: (if $ws == "" then []
+                else [{label: ("Back to scene: " + $name),
+                       detail: (if $kb != "" then $kb else "workspace " + $ws end),
+                       args: []}] end)
+  }'
+  exit 0
+fi
+
+CUR="${DOT_ORIG_WS:-$($AEROSPACE list-workspaces --focused)}"
+WS="$(target "$CUR")" || {
+  echo "scene last: no other scene has been open" >&2
+  exit 1
+}
+
+# Land on the scene's own window, not whatever AeroSpace last focused there --
+# same reason scene open asserts it.
+FIRST="$(awk -F'\t' -v w="$WS" '$1 == w { print $3; exit }' "$LEDGER" 2>/dev/null | cut -d, -f1)"
+audit "scene last -> $WS"
+$AEROSPACE eval "workspace $WS${FIRST:+; focus --window-id $FIRST}" >/dev/null 2>&1 \
+  || $AEROSPACE workspace "$WS"

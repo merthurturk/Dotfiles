@@ -78,6 +78,26 @@ exactly how `close` ends up destroying whatever you put there next.
 `--force` still closes everything on the workspace, for when that is what you
 mean.
 
+## Bouncing between two
+
+```sh
+dot scene last
+```
+
+Goes back to the scene you were in before this one — `⌥tab` for scenes, which
+is not the same as `⌥tab` for workspaces once you have visited an ordinary
+workspace in between. It is in the palette; to give it a key:
+
+```toml
+ctrl-alt-tab = 'exec-and-forget $HOME/.local/bin/dot scene last'
+```
+
+The history is two lines in `~/.local/state/aerospace/scene-focus`, written by
+the bar's workspace plugin — which already knows the focused workspace and
+already has the ledger in memory, so this costs no extra process on the repaint
+path. The ledger, not the history, decides whether the scene is still real: a
+closed scene leaves its entry behind and is skipped.
+
 ## Badges
 
 A workspace running a scene shows the scene's glyph and name in its colour

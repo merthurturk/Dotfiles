@@ -76,6 +76,18 @@ fi
 SCENE_STATE=""
 [ -f "$SCENES_STATE" ] && SCENE_STATE="$(sed 's/^/S\t/' "$SCENES_STATE")"
 
+# Remember which scene workspaces were looked at, most recent first, so
+# `dot scene last` can bounce between the two you are actually using. This is
+# the repaint path, so it is pure shell: a case match on the ledger already in
+# memory, and one small write only when the answer changes.
+case "$SCENE_STATE" in
+  *"S"$'\t'"$FOCUSED"$'\t'*)
+    HIST="${XDG_STATE_HOME:-$HOME/.local/state}/aerospace/scene-focus"
+    prev=""; [ -f "$HIST" ] && IFS= read -r prev < "$HIST"
+    [ "$prev" = "$FOCUSED" ] || printf '%s\n%s\n' "$FOCUSED" "$prev" > "$HIST"
+    ;;
+esac
+
 # "NAME=tint,edge,deep;…" so awk can look a badge up instead of forking.
 BADGES=""
 for b in PEACH TEAL MAUVE BLUE GREEN; do

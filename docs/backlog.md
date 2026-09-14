@@ -5,7 +5,8 @@ by how interesting they are to build.
 
 Each says roughly what it costs and — where it matters — what makes it safe.
 Items are removed from this list when they ship, not ticked off: `dot scene
-save`, `dot window send`, `dot window pin` and `dot theme auto` were all here.
+save`, `dot window send`, `dot window pin`, `dot theme auto` and `dot scene
+last` were all here.
 
 ---
 
@@ -22,13 +23,6 @@ restart and replayed.
 
 *Medium, and it needs care: replaying should be opt-in, and never clobber
 windows that are already open.*
-
-### Last-scene toggle
-
-`⌥tab` for workspaces exists. The equivalent for scenes — bounce between the two
-you're actually using — is one more small capability.
-
-*Small.*
 
 ---
 
