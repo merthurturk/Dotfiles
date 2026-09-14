@@ -78,6 +78,42 @@ exactly how `close` ends up destroying whatever you put there next.
 `--force` still closes everything on the workspace, for when that is what you
 mean.
 
+## Changing one
+
+```sh
+dot scene edit                       # guided, from the launcher
+dot scene edit chill --badge GREEN
+dot scene edit chill --icon 󰅶 --label "Chill" --ratio 0.7
+dot scene edit chill --rename evening
+dot scene delete chill               # the definition; no windows are closed
+```
+
+From the palette it is one row, *"Edit a scene…"*: pick the scene, pick what to
+change, pick the value. `dot scene save` gives every new scene the same default
+glyph and colour, and the moment you want to fix that you are looking at the
+bar, not at a JSON file.
+
+Icons come from `config/aerospace/scene-icons.tsv`, and every glyph in it is
+verified present in Hack Nerd Font — which is what the bar falls back to for
+codepoints Berkeley Mono does not carry. A missing glyph renders as an empty
+box and you only find out by looking. Pick a colour from `PEACH`, `TEAL`,
+`MAUVE`, `BLUE`, `GREEN`; those are the badge palettes each theme defines.
+
+Everything is written to `scenes.local.json`, including changes to the two
+scenes this repo ships — one key is enough, because the merge is recursive, so
+your override sticks and a `git pull` can still update the rest of the original.
+
+Deleting a shipped scene writes `null` rather than removing the key. A
+**tombstone**, because removing the key would only let the shipped scene back
+in on the next merge, which reads as the delete having quietly failed. Deleting
+a scene that is open forgets the ledger entry: its windows stay exactly where
+they are and go back to being ordinary windows.
+
+`dot scene delete` has no launcher row of its own on purpose. It is reached
+through `dot scene edit`, where you have already said which scene you mean — a
+destructive action one keystroke from the top of a palette is how you delete the
+wrong thing.
+
 ## Bouncing between two
 
 ```sh
@@ -116,6 +152,12 @@ a `git pull`. Same shape; only the keys you set are overridden:
 
 ```json
 { "chill": { "windows": ["chrome-app:https://your-chat.example.com"] } }
+```
+
+A `null` there is a tombstone — a shipped scene you deleted:
+
+```json
+{ "messaging": null }
 ```
 
 ## Adding one

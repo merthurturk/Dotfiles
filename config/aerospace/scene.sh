@@ -91,10 +91,15 @@ SCENES_FILE="$DIR/scenes.json"
 
 # scenes.local.json is yours and gitignored; it is merged over the shipped
 # examples, so a fork gets sensible defaults and your own scenes survive a pull.
+#
+# A null in the local file is a tombstone: it is how you delete a scene you did
+# not write. Removing the key would only let the shipped one back in on the
+# next merge, which reads as the delete having silently failed.
 if [ -f "$DIR/scenes.local.json" ]; then
   _merged="$(mktemp)"
   trap 'rm -f "$_merged"' EXIT
-  if jq -s '.[0] * .[1]' "$DIR/scenes.json" "$DIR/scenes.local.json" > "$_merged" 2>/dev/null; then
+  if jq -s '.[0] * .[1] | with_entries(select(.value != null))' \
+       "$DIR/scenes.json" "$DIR/scenes.local.json" > "$_merged" 2>/dev/null; then
     SCENES_FILE="$_merged"
   fi
 fi
@@ -117,10 +122,11 @@ if [ "${1:-}" = "--describe" ]; then
   jq -r '
     to_entries[]
     | .key + "\t" + ([ .value.windows[]
-        | sub("^app:"; "")
-        | sub("^chrome-app:https?://(www\\.)?"; "")
-        | sub("^chrome:https?://(www\\.)?"; "")
-        | split(" ")[0] | split("/")[0] ] | join(" + "))
+        # Only a chrome spec holds several space-separated URLs. Trimming an
+        # app spec at the first space turned "T3 Code (Alpha)" into "T3".
+        | if startswith("app:") then sub("^app:"; "")
+          else sub("^chrome(-app)?:https?://(www\\.)?"; "")
+               | split(" ")[0] | split("/")[0] end ] | join(" + "))
   ' "$SCENES_FILE" 2>/dev/null
   exit 0
 fi

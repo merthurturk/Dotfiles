@@ -7,11 +7,16 @@ if [ "${1:-}" = "--describe" ]; then
     --argjson choices "$("$DOT_ROOT/config/aerospace/scene.sh" --scenes-json | jq -c 'keys')" \
     --argjson instances "$(
       "$DOT_ROOT/config/aerospace/scene.sh" --describe 2>/dev/null \
-      | jq -R -s --arg kb "$(keysym "$(keybinding 'dot scene open')")" '
+      | while IFS=$'\t' read -r name summary; do
+          # Per scene, not the first `dot scene open` line in the config: that
+          # one belongs to whichever scene happens to be bound, and was being
+          # shown against every scene as though they all had that key.
+          kb="$(keybinding "dot scene open $name")"
+          printf '%s\t%s\n' "$name" "$([ -n "$kb" ] && keysym "$kb" || printf '%s' "$summary")"
+        done \
+      | jq -R -s '
           split("\n") | map(select(length>0)) | map(split("\t")) |
-          map({label: ("Open scene: " + .[0]),
-               detail: (if .[0] == "chill" then $kb else .[1] end),
-               args: [.[0]]})')" '
+          map({label: ("Open scene: " + .[0]), detail: (.[1] // ""), args: [.[0]]})')" '
     {
       id: "scene.open",
       summary: "Open a named scene on the first empty workspace",

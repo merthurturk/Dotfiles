@@ -55,8 +55,12 @@ ORIG_WS="${DOT_ORIG_WS:-$($AEROSPACE list-workspaces --focused)}"
 BEFORE="$(snapshot_windows)"
 
 # printf %q so a request with quotes or spaces survives the shell.
+# env -u DOT_ACTOR: the palette sets it so the audit log can say who did
+# something, and every process it launches inherits it. A session started from
+# the launcher would otherwise attribute everything you type in it, for as long
+# as it lives, to the launcher.
 "$GHOSTTY" --working-directory="$DOT_ROOT" --title="dot ai" \
-           -e /bin/bash -lc "claude $(printf '%q' "$REQUEST")" &
+           -e /usr/bin/env -u DOT_ACTOR /bin/bash -lc "claude $(printf '%q' "$REQUEST")" &
 
 NEW="$(wait_for_new_window "$BEFORE")"
 [ -n "$NEW" ] || { echo "dot ai: session window never appeared" >&2; exit 1; }

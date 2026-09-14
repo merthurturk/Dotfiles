@@ -1,0 +1,40 @@
+# <glyph>\t<name>  -- offered by `dot scene edit`.
+# Every one of these is verified present in Hack Nerd Font, which is what
+# the bar falls back to for glyphs Berkeley Mono does not carry. An icon
+# that is missing renders as an empty box, and you only find out by looking.
+󰅶	coffee
+󰭹	chat
+󰍡	message
+󰇮	email
+󰍹	monitor
+󰆍	terminal
+󰅩	code-braces
+󰃤	bug
+󰂓	flask
+󰚹	rocket
+󰕲	wrench
+󰧑	brain
+󰌵	lightbulb
+󰯁	book-open
+󰒏	school
+󰎕	newspaper
+󰃖	briefcase
+󰃭	calendar
+󰅐	clock
+󰄨	chart
+󰉋	folder
+󰅟	cloud
+󰅥	globe
+󰒘	shield
+󰝙	music
+󰋋	headphones
+󰕧	video
+󰄀	camera
+󰊖	gamepad
+󰏘	palette
+󰏫	pencil
+󰓎	star
+󰋑	heart
+󰋜	home
+󰄐	cart
+󰯃	wallet

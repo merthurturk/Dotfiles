@@ -1,0 +1,190 @@
+#!/usr/bin/env bash
+#
+# dot scene edit [name] [--rename X] [--label X] [--icon X] [--badge X] [--ratio N]
+#
+# Changes what a scene is called and how its pill looks. With no arguments it
+# walks you through it from the launcher, which is the point: `dot scene save`
+# gives every new scene the same default glyph and colour, and the moment you
+# want to fix that you are looking at the bar, not a JSON file.
+#
+# Every change is written to scenes.local.json, including changes to the two
+# scenes this repo ships -- your copy wins the merge, and a pull can still
+# update the original.
+
+set -u
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+
+SCENE_SH="$DOT_ROOT/config/aerospace/scene.sh"
+LOCAL="$DOT_ROOT/config/aerospace/scenes.local.json"
+SHIPPED="$DOT_ROOT/config/aerospace/scenes.json"
+ICONS="$DOT_ROOT/config/aerospace/scene-icons.tsv"
+PICKER="$DOT_ROOT/config/aerospace/bin/picker"
+LEDGER="$STATE_DIR/scenes"
+BADGES="PEACH TEAL MAUVE BLUE GREEN"
+
+merged() { "$SCENE_SH" --scenes-json 2>/dev/null; }
+
+if [ "${1:-}" = "--describe" ]; then
+  n="$(merged | jq 'length' 2>/dev/null)"; n="${n:-0}"
+  jq -n --argjson n "$n" --argjson badges "$(printf '%s\n' $BADGES | jq -R -s 'split("\n")|map(select(length>0))')" '{
+    id: "scene.edit",
+    summary: "Rename a scene, or change its icon, colour or split",
+    args: [{name:"name", required:false, note:"asked for when omitted"},
+           {name:"--rename", required:false}, {name:"--label", required:false},
+           {name:"--icon", required:false}, {name:"--badge", required:false, choices:$badges},
+           {name:"--ratio", required:false}],
+    destructive: false,
+    guard: "writes only to scenes.local.json; the shipped scenes.json is never touched",
+    verify: "dot scene list --json",
+    instances: (if $n == 0 then []
+                else [{label: "Edit a scene…",
+                       detail: ("rename, icon, colour" + (if $n == 1 then "" else " — " + ($n|tostring) + " scenes" end)),
+                       args: []}] end)
+  }'
+  exit 0
+fi
+
+pick() {  # <prompt>  -- rows on stdin as "label\tdetail"
+  [ -x "$PICKER" ] || { echo "scene edit: picker not built - run install.sh" >&2; exit 1; }
+  PICKER_PROMPT="$1" PICKER_CONTEXT="${2:-scene-edit}" "$PICKER"
+}
+ask() {   # <prompt> [seed]  -- a line of text
+  PICKER_MODE=input PICKER_PROMPT="$1" "$PICKER" </dev/null
+}
+
+# A scene name is how you address it on the command line, so keep it addressable.
+slug() { printf '%s' "$1" | tr '[:upper:] ' '[:lower:]-' | tr -cd 'a-z0-9._-'; }
+
+# Writes go to the local file only. jq's * is a recursive merge, so storing one
+# changed key is enough to override a shipped scene -- no need to copy the rest
+# of it, which would then stop tracking upstream.
+set_field() {  # <scene> <key> <json value>
+  [ -f "$LOCAL" ] || echo '{}' > "$LOCAL"
+  local tmp="$LOCAL.tmp"
+  jq --arg n "$1" --arg k "$2" --argjson v "$3" \
+     '.[$n] = ((.[$n] // {}) + {($k): $v})' "$LOCAL" > "$tmp" && mv "$tmp" "$LOCAL"
+}
+
+# The bar reads scenes.json on every repaint, so a change shows up on the next
+# workspace switch anyway -- but waiting for one to see whether you liked the
+# colour is a poor way to choose a colour.
+repaint() { sketchybar --trigger aerospace_workspace_change >/dev/null 2>&1 || true; }
+
+NAME=""; RENAME=""; LABEL=""; ICON=""; BADGE=""; RATIO=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --rename) RENAME="${2:-}"; shift 2 ;;
+    --label)  LABEL="${2:-}";  shift 2 ;;
+    --icon)   ICON="${2:-}";   shift 2 ;;
+    --badge)  BADGE="${2:-}";  shift 2 ;;
+    --ratio)  RATIO="${2:-}";  shift 2 ;;
+    -*) echo "scene edit: unknown option $1" >&2; exit 1 ;;
+    *) [ -z "$NAME" ] && NAME="$1"; shift ;;
+  esac
+done
+
+DEFS="$(merged)"
+[ "$(printf '%s' "$DEFS" | jq 'length')" -gt 0 ] || { echo "scene edit: no scenes defined" >&2; exit 1; }
+
+if [ -z "$NAME" ]; then
+  choice="$(printf '%s' "$DEFS" | jq -r '
+      to_entries[] | ((.value.icon // "·") + "  " + .key) + "\t" +
+        ([.value.windows[]
+          | if startswith("app:") then sub("^app:";"")
+            else sub("^chrome(-app)?:https?://(www\\.)?";"")
+                 | split(" ")[0] | split("/")[0] end] | join(" + "))' \
+    | pick "Which scene?")"
+  [ -n "$choice" ] || exit 0
+  NAME="${choice##*  }"
+fi
+printf '%s' "$DEFS" | jq -e --arg n "$NAME" 'has($n)' >/dev/null 2>&1 \
+  || { echo "scene edit: no scene '$NAME'" >&2; exit 1; }
+
+# Guided: nothing was asked for on the command line, so ask.
+if [ -z "$RENAME$LABEL$ICON$BADGE$RATIO" ]; then
+  cur() { printf '%s' "$DEFS" | jq -r --arg n "$NAME" ".[\$n].$1 // \"\" | tostring"; }
+  field="$(printf 'Icon\t%s\nColour\t%s\nLabel\t%s\nName\t%s\nSplit\t%s\nDelete\tremove this scene\n' \
+             "$(cur icon)" "$(cur badge)" "$(cur label)" "$NAME" "$(cur ratio)" \
+           | pick "Change what about $NAME?" scene-edit-field | cut -f1)"
+  case "$field" in
+    Icon)
+      g="$(grep -v '^#' "$ICONS" | awk -F'\t' 'NF==2 { print $1 "  " $2 "\t" }' \
+           | pick "Pick an icon for $NAME" scene-icon | awk '{print $1}')"
+      [ -n "$g" ] || exit 0
+      ICON="$g" ;;
+    Colour)
+      # shellcheck disable=SC2086  # word splitting is the list
+      c="$(for b in $BADGES; do printf '%s\t\n' "$b"; done | pick "Pick a colour for $NAME" scene-badge | cut -f1)"
+      [ -n "$c" ] || exit 0
+      BADGE="$c" ;;
+    Label) LABEL="$(ask "What should the pill say? (now: $(cur label))")"; [ -n "$LABEL" ] || exit 0 ;;
+    Name)  RENAME="$(ask "Rename $NAME to…")"; [ -n "$RENAME" ] || exit 0 ;;
+    Split)
+      r="$(printf '50 / 50\t0.5\n60 / 40\t0.6\n70 / 30\t0.7\n40 / 60\t0.4\n30 / 70\t0.3\n' \
+           | pick "How should $NAME split?" scene-ratio | cut -f2)"
+      [ -n "$r" ] || exit 0
+      RATIO="$r" ;;
+    Delete)
+      # The confirmation belongs here, where there is demonstrably a picker in
+      # front of a person -- scene-delete cannot tell that from its own side.
+      open_on="$(awk -F'\t' -v s="$NAME" '$2 == s { print $1 }' "$LEDGER" 2>/dev/null | paste -sd ', ' -)"
+      d="the definition only; no windows are closed"
+      [ -n "$open_on" ] && d="open on workspace $open_on -- those windows stay, and stop being a scene"
+      ans="$(printf 'Delete "%s"\t%s\nKeep it\t\n' "$NAME" "$d" | pick "Delete the scene $NAME?" confirm)"
+      case "$ans" in Delete*) ;; *) exit 0 ;; esac
+      exec "$DOT_ROOT/libexec/dot/scene-delete" "$NAME" --force ;;
+    *) exit 0 ;;
+  esac
+fi
+
+changed=""
+[ -n "$ICON" ]  && { set_field "$NAME" icon  "$(jq -n --arg v "$ICON" '$v')";  changed="$changed icon"; }
+[ -n "$LABEL" ] && { set_field "$NAME" label "$(jq -n --arg v "$LABEL" '$v')"; changed="$changed label"; }
+if [ -n "$BADGE" ]; then
+  BADGE="$(printf '%s' "$BADGE" | tr '[:lower:]' '[:upper:]')"
+  case " $BADGES " in
+    *" $BADGE "*) ;;
+    *) echo "scene edit: no badge colour '$BADGE' (have:$BADGES)" >&2; exit 1 ;;
+  esac
+  set_field "$NAME" badge "$(jq -n --arg v "$BADGE" '$v')"; changed="$changed colour"
+fi
+if [ -n "$RATIO" ]; then
+  jq -n --argjson v "$RATIO" 'if $v > 0 and $v < 1 then . else error("range") end' >/dev/null 2>&1 \
+    || { echo "scene edit: ratio must be between 0 and 1" >&2; exit 1; }
+  set_field "$NAME" ratio "$RATIO"; changed="$changed split"
+fi
+
+if [ -n "$RENAME" ]; then
+  NEW="$(slug "$RENAME")"
+  [ -n "$NEW" ] || { echo "scene edit: that is not a usable name" >&2; exit 1; }
+  if [ "$NEW" != "$NAME" ]; then
+    merged | jq -e --arg n "$NEW" 'has($n)' >/dev/null 2>&1 \
+      && { echo "scene edit: '$NEW' already exists" >&2; exit 1; }
+    # The renamed scene becomes wholly local: there is no shipped scene under
+    # the new name for a partial override to merge onto.
+    obj="$(merged | jq -c --arg n "$NAME" '.[$n]')"
+    [ -f "$LOCAL" ] || echo '{}' > "$LOCAL"
+    tmp="$LOCAL.tmp"
+    # A tombstone, not a deletion, when the old name is one this repo ships:
+    # removing the key would let the shipped scene back in on the next merge.
+    jq --arg old "$NAME" --arg new "$NEW" --argjson obj "$obj" \
+       --argjson shipped "$(jq --arg n "$NAME" 'has($n)' "$SHIPPED")" \
+       '.[$new] = $obj | if $shipped then .[$old] = null else del(.[$old]) end' \
+       "$LOCAL" > "$tmp" && mv "$tmp" "$LOCAL"
+    # An open scene is remembered by name; leaving the old one there would
+    # blank its pill and make `dot scene close` stop recognising it.
+    if [ -f "$LEDGER" ]; then
+      awk -F'\t' -v o="$NAME" -v n="$NEW" 'BEGIN{OFS="\t"} $2 == o { $2 = n } 1' \
+        "$LEDGER" > "$LEDGER.tmp" && mv "$LEDGER.tmp" "$LEDGER"
+    fi
+    changed="$changed name"
+    audit "scene edit $NAME renamed to $NEW"
+    NAME="$NEW"
+  fi
+fi
+
+[ -n "$changed" ] || { echo "scene edit: nothing to change" >&2; exit 1; }
+audit "scene edit $NAME:$changed"
+repaint
+printf 'scene %s:%s updated\n' "$NAME" "$changed"
+merged | jq -r --arg n "$NAME" '.[$n] | "  \(.icon // "·") \(.label // $n)   badge \(.badge // "BLUE"), split \(.ratio // 0.5)"' --arg n "$NAME"
