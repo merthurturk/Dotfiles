@@ -85,16 +85,16 @@ if [ "${1:-}" = "--arrived" ]; then
 
   # shellcheck source=/dev/null
   source "$DOT_ROOT/config/aerospace/split-lib.sh"
-  target="$(split_target "$main" "$(ratio_for "$name")")" || exit 0
+  expected="$(split_expected "$main" "$(ratio_for "$name")")" || exit 0
   actual="$("$DOT_ROOT/config/aerospace/bin/geometry" 2>/dev/null \
             | awk -F'\t' -v w="$main" '$1 == w { print $4; exit }')"
   [ -n "$actual" ] || exit 0
 
   # A point or two either way is rounding, not drift.
-  off=$(( actual > target ? actual - target : target - actual ))
+  off=$(( actual > expected ? actual - expected : expected - actual ))
   [ "$off" -le 2 ] && exit 0
 
-  reflow_ws "$ws" && audit "window reflow --arrived $ws ($actual -> $target)"
+  reflow_ws "$ws" && audit "window reflow --arrived $ws ($actual -> $expected)"
   exit 0
 fi
 

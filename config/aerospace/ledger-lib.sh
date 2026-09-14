@@ -108,6 +108,16 @@ prune_scenes() {
   [ -f "$STATE_FILE" ] || return 0
   local tmp ws name ids live; tmp="$(mktemp)"
   live="$($AEROSPACE list-windows --all --format '%{window-id}' 2>/dev/null)"
+
+  # If AeroSpace reports no windows at all, believe the connection is broken
+  # rather than that every scene closed at once. It is never true that nothing
+  # is open -- something is running this code.
+  #
+  # This is not hypothetical. AeroSpace lost its Accessibility grant, started
+  # answering "no windows" to everything, and the next prune dropped every
+  # entry. The ledger is what stops `dot scene close` touching windows a scene
+  # did not open; emptying it on a bad answer is the wrong way to fail.
+  [ -n "$live" ] || { rm -f "$tmp"; return 0; }
   while IFS=$'\t' read -r ws name ids; do
     [ -n "${ws:-}" ] || continue
     [ -n "$(scene_live_windows "$ws" "$live")" ] && printf '%s\t%s\t%s\n' "$ws" "$name" "$ids"

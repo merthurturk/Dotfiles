@@ -120,12 +120,18 @@ place_window() {
 
 # split_resize <window-id> <ratio>
 # Sizes that window to <ratio> of the two-tile area; its sibling takes the rest.
-# split_target <window-id> <ratio>
+# _split_widths <window-id> <ratio>  ->  "<node width> <visible width>"
 #
-# The width this window should have, in points. Split out from split_resize so
-# it can be asked without being applied -- `dot window reflow --arrived` checks
-# whether a split is already right before touching anything.
-split_target() {
+# Two different numbers, and confusing them is easy: `resize width` sets the
+# *node* width, which carries half the inner gap, so the window you can see
+# ends up INNER_H/2 narrower than the number you asked for. Ask for 1013 and
+# measure 1008.
+#
+# split_resize wants the first. `dot window reflow --arrived`, which compares
+# against what `dot window geometry` measured, wants the second -- comparing
+# the two is how the first version of that check decided a correct split was
+# 5pt wrong and resized it on every arrival.
+_split_widths() {
   local wid="$1" ratio="$2"
   local outer_l outer_r inner_h mon mon_w tile_w n row
 
@@ -152,12 +158,12 @@ split_target() {
   [ "${n:-0}" -lt 2 ] && n=2
   tile_w=$(( mon_w - outer_l - outer_r - inner_h * (n - 1) ))
 
-  # `resize width` sets the *node* width, which carries half the inner gap, so
-  # the visible window lands INNER_H/2 narrower than asked. Measured at several
-  # widths and confirmed constant; add it back.
   awk -v w="$tile_w" -v r="$ratio" -v g="$inner_h" \
-      'BEGIN { printf "%d", w * r + 0.5 + g / 2 }'
+      'BEGIN { printf "%d %d", w * r + 0.5 + g / 2, w * r + 0.5 }'
 }
+
+split_target()   { local x; x="$(_split_widths "$@")" || return 1; printf '%s' "${x%% *}"; }
+split_expected() { local x; x="$(_split_widths "$@")" || return 1; printf '%s' "${x##* }"; }
 
 split_resize() {
   local wid="$1" ratio="$2" target
