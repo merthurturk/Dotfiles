@@ -315,14 +315,19 @@ fi
 # Chrome|com.google.Chrome" splits into two useless words.
 quit_if_empty() {
   local entry app bundle live quit_names=""
-  # Two independent views of what is still open. AeroSpace knows the windows it
-  # manages; CGWindowList sees every window there is, including ones AeroSpace
-  # does not tile. Either one saying "still open" is enough to leave the app
-  # alone -- the conservative direction is the safe one here.
+  # AeroSpace alone decides this.
+  #
+  # An earlier version also consulted CGWindowListCopyWindowInfo, on the theory
+  # that two views are safer than one. They are not, when one of them is wrong:
+  # CG retains entries for windows that have already closed. With WhatsApp and
+  # Telegram sitting there running with no windows at all, it still reported a
+  # 840x1051 "Telegram @ Mert" for each of them -- and a Ghostty that had quit
+  # an hour earlier. So the cross-check never let either app be quit, which is
+  # exactly the case this feature exists for.
+  #
+  # AeroSpace is the authority on which windows exist; it is what every other
+  # decision in this repo is made from, and it was right here too.
   live="$($AEROSPACE list-windows --monitor all --format '%{app-name}' 2>/dev/null)"
-  local geom="$DIR/bin/geometry"
-  [ -x "$geom" ] && live="$live
-$("$geom" 2>/dev/null | cut -f6)"
 
   while IFS= read -r entry; do
     app="${entry%%|*}"; bundle="${entry#*|}"
@@ -334,7 +339,11 @@ $("$geom" 2>/dev/null | cut -f6)"
     if osascript -e "tell application id \"$bundle\" to quit" >/dev/null 2>&1; then
       quit_names="$quit_names $app"
     else
-      echo "scene: could not quit $app -- grant Automation for it (dot doctor says where)" >&2
+      # Quitting another app is an Apple Event, so the first attempt asks for
+      # Automation permission. Run from a keybinding there may be no prompt to
+      # answer -- it just fails -- so say what happened rather than leaving the
+      # app silently running. System Settings > Privacy & Security > Automation.
+      echo "scene: could not quit $app -- allow it under Privacy & Security > Automation" >&2
     fi
   done
   printf '%s' "${quit_names# }"
@@ -406,8 +415,10 @@ if [ "${1:-}" = "close" ]; then
 
   if [ -n "$APPS" ]; then
     # The windows have to be actually gone before asking whether any are left,
-    # and `close` returns before that.
-    for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+    # and `close` returns before that. Up to two seconds: an app is entitled to
+    # take a moment over closing a window, and quitting it early would be
+    # deciding on stale information.
+    for _ in $(seq 1 50); do
       still=0
       for wid in $WIDS; do
         $AEROSPACE list-windows --monitor all --format '%{window-id}' 2>/dev/null \

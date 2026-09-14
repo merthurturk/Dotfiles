@@ -165,9 +165,19 @@ you happen to have a second WhatsApp window somewhere. Verified: a scene with
 had a window on another workspace.
 
 `dot scene close --quit` and `--no-quit` override the scene's setting for one
-close. Apps are quit by bundle id through AppleScript, which asks for
-Automation permission the first time for each app; if you decline, the close
-still happens and the app is left running with a note saying so.
+close. Apps are quit by bundle id through AppleScript, which is an Apple Event and so
+asks for Automation permission the first time for each app — *System Settings >
+Privacy & Security > Automation*. Triggered from a keybinding there may be no
+prompt to answer and it simply fails; either way the windows still close and
+the log says which app was left running.
+
+**The check is AeroSpace's window list, and only AeroSpace's.** An earlier
+version cross-checked `CGWindowListCopyWindowInfo` on the theory that two views
+are safer than one. They are not, when one of them is wrong: CG retains entries
+for windows that have already closed. With WhatsApp and Telegram running with
+no windows at all it still reported an 840×1051 window for each — and a Ghostty
+that had quit an hour earlier. The cross-check therefore vetoed exactly the case
+the feature exists for.
 
 The palette says which scenes do this: *"Close scene: messaging · workspace 4 —
 and quits its apps"*.
