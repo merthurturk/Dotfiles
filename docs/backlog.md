@@ -71,20 +71,6 @@ owner.
 
 *Medium. `json_update` in `_lib.sh` already took the atomicity half of this.*
 
-### The bar still merges the scenes itself
-
-`config/sketchybar/plugins/aerospace.sh` has the fourth copy of the
-`scenes.json` + `scenes.local.json` merge, tombstone rule and all, with a
-comment naming `scene.sh` as the owner — which is the repo admitting the drift
-it is creating. Three other copies were removed; this one stayed because it is
-on the repaint path and calling out costs a process.
-
-The honest fix is `scene.sh --defs` emitting the exact `D\t<key>\t<icon>\t<label>\t<badge>`
-TSV the plugin already feeds to awk, which also deletes the plugin's
-`if -f local / else` fork.
-
-*Small, and it should be measured against the repaint budget before landing.*
-
 ### One window snapshot for the whole palette
 
 Roughly thirty descriptors each open their own `aerospace` connection on every
@@ -94,15 +80,6 @@ the snapshot once and export it, the way `dot menu` already exports
 
 *Medium — it changes the descriptor contract, which is the one interface this
 project promises not to make complicated.*
-
-### Wake `theme auto` at sunset, not every ten minutes
-
-`sun_times` already yields the exact sunrise and sunset epochs, and the agent
-already rewrites its own plist on `on`. `StartCalendarInterval` at those two
-times is 2 wakeups a day instead of 144, and switches *at* dusk rather than up
-to ten minutes after it.
-
-*Small.*
 
 ---
 

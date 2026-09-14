@@ -89,10 +89,15 @@ for your location — no new permission, and no almanac in here. With no locatio
 set for Night Shift it falls back to 07:00–19:00 and says so.
 
 Turning it on keeps the theme you are already using for its own half of the
-day, and only picks the other one. A launchd agent checks every ten minutes and
-exits immediately when the right theme is already on, so the switch happens once
-at dusk rather than being a thing that keeps happening to you. Setting a theme
-by hand while it is on tells you that it will be put back, and how to keep it.
+day, and only picks the other one. Setting a theme by hand while it is on tells
+you that it will be put back, and how to keep it.
+
+The launchd agent is **resident, not periodic**: it sleeps until the next
+transition and applies it on the second. Two meaningful wakeups a day instead
+of a hundred and forty-four, and the switch lands *at* dusk rather than up to
+ten minutes after it. Each sleep is capped at half an hour so a lid closed
+through dusk self-corrects — `sleep` does not run while the machine is asleep,
+so an uncapped one would wake hours late.
 
 ## The desktop picture and the screen saver
 

@@ -11,19 +11,24 @@
         <string>__HOME__/.local/bin/dot</string>
         <string>theme</string>
         <string>auto</string>
-        <string>--apply</string>
+        <string>--watch</string>
     </array>
 
-    <!-- Sunrise and sunset move by a minute or two a day, so there is no fixed
-         time to fire at. Polling is the honest option: --apply is one read of
-         the cached sun times and exits without doing anything if the theme is
-         already right, so the cost of checking is close to nothing. Ten
-         minutes is well inside the few minutes of dusk you would notice. -->
-    <key>StartInterval</key>
-    <integer>600</integer>
-
+    <!-- Resident, not periodic. --watch sleeps until the next transition and
+         applies it on the second, rather than polling every ten minutes and
+         landing up to ten minutes late. It caps each sleep at half an hour so
+         a lid closed through dusk self-corrects: sleep does not run while the
+         machine is asleep. -->
     <key>RunAtLoad</key>
     <true/>
+
+    <!-- The loop should not end; if it does, something went wrong and the
+         right answer is to start it again rather than silently stop following
+         the sun. ThrottleInterval stops a tight loop if it fails instantly. -->
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
 
     <key>StandardErrorPath</key>
     <string>__HOME__/.local/state/aerospace/theme-auto.err</string>

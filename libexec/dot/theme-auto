@@ -102,7 +102,8 @@ if [ "${1:-}" = "--describe" ]; then
            {name:"--would-override", required:false, note:"what dot theme set asks"},
            {name:"--light", required:false, default:$light},
            {name:"--dark", required:false, default:$dark},
-           {name:"--apply", required:false, note:"what the launchd agent runs"}],
+           {name:"--apply", required:false},
+           {name:"--watch", required:false, note:"what the launchd agent runs"}],
     destructive: false,
     guard: "only ever switches between the two themes you named",
     verify: "dot theme auto",
@@ -115,6 +116,41 @@ if [ "${1:-}" = "--describe" ]; then
       end)
   }'
   exit 0
+fi
+
+# Seconds until the next light/dark transition, capped at half an hour.
+#
+# The cap is what makes this correct across a closed lid: `sleep` does not run
+# while the machine is asleep, so an uncapped sleep through a transition would
+# wake up hours late. Re-evaluating at least every 30 minutes bounds that, and
+# every one of those wakeups is a date comparison against a cached sun time --
+# no jq, no AppleScript, no theme work.
+if [ "${1:-}" = "--seconds-to-next" ]; then
+  times="$(sun_times)" || { echo 1800; exit 0; }
+  rise="${times%% *}"; set="${times##* }"; now="$(date +%s)"
+  if   [ "$now" -lt "$rise" ]; then next="$rise"
+  elif [ "$now" -lt "$set" ];  then next="$set"
+  else next=$(( rise + 86400 ))   # tomorrow, to a minute or so; the cache
+  fi                              # re-reads the real time when the date rolls
+  d=$(( next - now ))
+  [ "$d" -lt 5 ] && d=5
+  [ "$d" -gt 1800 ] && d=1800
+  echo "$d"
+  exit 0
+fi
+
+# The resident half of the agent: apply, then sleep until there is something to
+# do. Two meaningful wakeups a day instead of a hundred and forty-four, and the
+# switch lands *at* dusk rather than up to ten minutes after it.
+#
+# Each pass runs --apply as a child so nothing in this long-lived process goes
+# stale -- the sun times and the theme list are both cached per process, which
+# is right for a command and wrong for something that outlives a day.
+if [ "${1:-}" = "--watch" ]; then
+  while :; do
+    "$0" --apply >/dev/null 2>&1 || true
+    sleep "$("$0" --seconds-to-next)"
+  done
 fi
 
 # Answer for `dot theme set`, so it does not have to know this agent's launchd
