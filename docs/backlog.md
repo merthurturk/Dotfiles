@@ -41,22 +41,6 @@ instead of looking.
 *Medium. It also removes the bar plugin's knowledge of reflow's queue path,
 file format and private `--now` flag.*
 
-### Move the scene-focus history into the ledger
-
-`dot scene last` reads a second state file, written by the **bar's renderer**,
-holding state `scene.sh` owns. It can name a workspace whose scene is gone, so
-`scene-last` filters it back out against the ledger — and that filter is the
-symptom telling you the second file was never needed. Being keyed on workspace,
-it is also silently orphaned by `dot scene move`.
-
-The ledger is already one line per open scene, already pruned, already owned.
-A fourth column — last-focused epoch — would carry this, need no liveness
-filter, and follow a scene through a move for free.
-
-*Small, once the stamping happens somewhere that means "you arrived" rather
-than "the bar repainted" — `aerospace_workspace_change` is also fired by hover,
-by `theme set` and by `scene edit`.*
-
 ### ~~One window snapshot for the whole palette~~ — measured, not worth it
 
 The estimate behind this was wrong. It is not thirty descriptors opening their

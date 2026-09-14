@@ -6,32 +6,23 @@
 # and they are not where AeroSpace's back-and-forth leaves you once you have
 # visited an ordinary workspace in between.
 #
-# The history is written by the bar's workspace plugin, which already knows the
-# focused workspace and already has the scene ledger in memory.
+# The order is kept in the ledger by the bar's workspace plugin, which already
+# knows the focused workspace and already has the ledger in memory.
 
 set -u
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
 _ledger_lib
-HIST="$STATE_DIR/scene-focus"
 
-# The most recently focused scene workspace that isn't the one you are on, and
-# is still running a scene. A closed scene leaves its entry behind in the
-# history; the ledger is what decides whether it is real.
-target() {
-  local cur="$1" ws
-  [ -f "$HIST" ] || return 1
-  while IFS= read -r ws; do
-    [ -n "$ws" ] || continue
-    [ "$ws" = "$cur" ] && continue
-    [ -n "$(ids_of "$ws")" ] && { printf '%s' "$ws"; return 0; }
-  done < "$HIST"
-  return 1
-}
+# The most recently used scene that is not this one. The order lives in the
+# ledger itself now -- see ledger-lib.sh -- so there is no separate history to
+# go stale, nothing to filter against, and a scene keeps its place in the order
+# when `dot scene move` takes it elsewhere.
+target() { ledger_previous "$1"; }
 
 if [ "${1:-}" = "--describe" ]; then
   cur="$(orig_ws)"
-  ws="$(target "$cur")" || ws=""
+  ws="$(target "$cur")"
   name="$(scene_of "$ws")"
   jq -n --arg ws "$ws" --arg name "$name" \
         --arg kb "$(keysym "$(keybinding 'dot scene last')")" '{
@@ -49,10 +40,8 @@ if [ "${1:-}" = "--describe" ]; then
 fi
 
 CUR="$(orig_ws)"
-WS="$(target "$CUR")" || {
-  echo "scene last: no other scene has been open" >&2
-  exit 1
-}
+WS="$(target "$CUR")"
+[ -n "$WS" ] || { echo "scene last: no other scene is open" >&2; exit 1; }
 
 # Land on the scene's own window, not whatever AeroSpace last focused there --
 # same reason scene open asserts it.

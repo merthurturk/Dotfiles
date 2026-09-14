@@ -18,6 +18,7 @@ STATE_FILE="$LEDGER_DIR/scenes"        # "<workspace>\t<scene>\t<id,id>" per lin
 PREV_FILE="$LEDGER_DIR/scenes-previous"
 : "${AEROSPACE:=/opt/homebrew/bin/aerospace}"
 NL=$'\n'
+TAB=$'\t'
 
 # remember_scene <workspace> <scene> <window-id>...
 #
@@ -117,6 +118,40 @@ prune_scenes() {
 scene_of() {         # <workspace> -> scene name, or empty
   [ -f "$STATE_FILE" ] || return 0
   awk -F'\t' -v w="$1" '$1 == w { print $2; exit }' "$STATE_FILE"
+}
+
+# --- most-recently-used order ---------------------------------------------
+#
+# The ledger is kept in the order you last looked at each scene, most recent
+# last. That is what `dot scene last` bounces on.
+#
+# It used to be a second file, scene-focus, written by the bar's *renderer* --
+# a second source of truth for something this file already owns, which could
+# name a workspace whose scene was gone (so scene-last had to filter it back
+# out against this file) and was silently orphaned by `dot scene move`. Order
+# here is none of those things: it is pruned with everything else, it follows a
+# scene through a move, and there is nothing to filter.
+#
+# Called from the bar on every workspace switch, so: no forks except the mv,
+# and nothing written when the order would not change. The write is a rename,
+# so a crash cannot leave a half-written ledger -- which matters more here than
+# it did for a throwaway history file.
+ledger_touch() {          # <workspace>
+  [ -f "$STATE_FILE" ] || return 0
+  local rows last
+  rows="$(<"$STATE_FILE")"
+  case "$NL$rows" in *"$NL$1$TAB"*) ;; *) return 0 ;; esac   # not a scene
+  last="${rows##*$NL}"
+  case "$last" in "$1$TAB"*) return 0 ;; esac                # already most recent
+  { printf '%s\n' "$rows" | grep -v "^$1$TAB"
+    printf '%s\n' "$rows" | grep "^$1$TAB"
+  } > "$STATE_FILE.$$" && mv "$STATE_FILE.$$" "$STATE_FILE"
+}
+
+# The workspace of the most recently used scene that is not <workspace>.
+ledger_previous() {       # <workspace to exclude>
+  awk -F'\t' -v cur="$1" '$1 != cur { w = $1 } END { if (w != "") print w }' \
+    "$STATE_FILE" 2>/dev/null
 }
 
 # --- reading, for anyone who is not scene.sh ------------------------------

@@ -70,17 +70,17 @@ SCENE_DEFS="$(scenes_defs_tsv)"
 SCENE_STATE=""
 [ -f "$SCENES_STATE" ] && SCENE_STATE="$(sed 's/^/S\t/' "$SCENES_STATE")"
 
-# Remember which scene workspaces were looked at, most recent first, so
-# `dot scene last` can bounce between the two you are actually using. This is
-# the repaint path, so it is pure shell: a case match on the ledger already in
-# memory, and one small write only when the answer changes.
-case "$SCENE_STATE" in
-  *"S"$'\t'"$FOCUSED"$'\t'*)
-    HIST="${XDG_STATE_HOME:-$HOME/.local/state}/aerospace/scene-focus"
-    prev=""; [ -f "$HIST" ] && IFS= read -r prev < "$HIST"
-    [ "$prev" = "$FOCUSED" ] || printf '%s\n%s\n' "$FOCUSED" "$prev" > "$HIST"
-    ;;
-esac
+# Keep the ledger in the order you last looked at each scene, so `dot scene
+# last` can bounce between the two you are using. This used to be a second
+# state file written from here; the ledger already owns which scene is where,
+# and putting the order in it means there is nothing extra to go stale, nothing
+# for scene-last to filter, and a scene keeps its place through a move.
+#
+# ledger_touch returns immediately unless the focused workspace is a scene and
+# is not already the most recent, so the common switch costs nothing.
+# shellcheck source=/dev/null
+source "$HOME/.config/aerospace/ledger-lib.sh"
+ledger_touch "$FOCUSED"
 
 # Drain a queued reflow the moment you arrive. A split cannot be applied to a
 # hidden workspace -- AeroSpace parks its windows off-screen rather than laying

@@ -214,11 +214,16 @@ workspace in between. It is in the palette; to give it a key:
 ctrl-alt-tab = 'exec-and-forget $HOME/.local/bin/dot scene last'
 ```
 
-The history is two lines in `~/.local/state/aerospace/scene-focus`, written by
-the bar's workspace plugin — which already knows the focused workspace and
-already has the ledger in memory, so this costs no extra process on the repaint
-path. The ledger, not the history, decides whether the scene is still real: a
-closed scene leaves its entry behind and is skipped.
+There is no separate history. The **ledger itself is kept in the order you
+last looked at each scene**, most recent last, stamped by the bar's workspace
+plugin — which already knows the focused workspace and already has the ledger
+in memory. It rewrites nothing unless the order would actually change.
+
+That used to be a second file, and being second was its whole problem: it could
+name a workspace whose scene had gone (so this had to filter it back out
+against the ledger), and `dot scene move` silently orphaned it. Order kept in
+the ledger is pruned with everything else, follows a scene through a move, and
+has nothing to filter.
 
 ## After a restart
 
