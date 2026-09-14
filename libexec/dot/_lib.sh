@@ -56,37 +56,22 @@ keysym() {
 
 # --- scenes ---------------------------------------------------------------
 
-# The merged scenes.json + scenes.local.json, cached.
+# The merged scenes.json + scenes.local.json.
 #
-# scene.sh owns the merge -- tombstones and all -- and this does not reimplement
-# it; it asks, and remembers the answer. Five descriptors read this on every
-# ⌥space, and each ask costs a bash start, a mktemp and a jq (~21ms) for a file
-# that only changes when you edit a scene.
+# scenes-lib.sh owns the merge, the tombstone rule and the cache of both, and
+# is sourced rather than shelled out to, so five descriptors reading this on
+# every ⌥space cost a file read each instead of a process each.
 #
-# The cache is invalidated three ways: either input being newer, scene.sh
-# itself being newer (otherwise changing the merge rule would leave every
-# capability reading the old answer), and explicitly by json_update.
-#
-# That last one is not belt-and-braces. mtime on this filesystem has one-second
-# granularity, so a write followed immediately by a read -- `dot scene edit`
-# saving and then printing what it saved, which is every edit -- compares equal
-# and the stale answer wins. It did: an edit reported the old icon back, and
-# `dot scene delete` could not find a scene that had just been renamed.
-SCENES_CACHE="$STATE_DIR/scenes-merged.json"
-scenes_json() {
-  local cache="$SCENES_CACHE"
-  local shipped="$DOT_ROOT/config/aerospace/scenes.json"
-  if [ -s "$cache" ] && [ ! "$shipped" -nt "$cache" ] \
-     && [ ! "$SCENES_LOCAL" -nt "$cache" ] && [ ! "$SCENE_SH" -nt "$cache" ]; then
-    cat "$cache"; return 0
-  fi
-  local tmp; tmp="$(mktemp)"
-  if "$SCENE_SH" --scenes-json 2>/dev/null > "$tmp" && [ -s "$tmp" ]; then
-    mkdir -p "$STATE_DIR"; mv "$tmp" "$cache"; cat "$cache"
-  else
-    rm -f "$tmp"; echo '{}'
-  fi
+# Sourced on first use, not at the top: two thirds of the capabilities never
+# ask about a scene, and parsing the file in all thirty-one of them cost more
+# than it saved in the five that do.
+_scenes_lib() {
+  [ -n "${SCENES_CACHE:-}" ] && return 0
+  # shellcheck source=/dev/null
+  source "$DOT_ROOT/config/aerospace/scenes-lib.sh"
 }
+scenes_json()  { _scenes_lib; scenes_merged; }
+drop_scenes_cache() { _scenes_lib; scenes_cache_clear; }
 
 scene_exists() { scenes_json | jq -e --arg n "$1" 'has($n)' >/dev/null 2>&1; }
 
@@ -156,7 +141,7 @@ json_update() {
   local tmp; tmp="$(mktemp)"
   if jq "$@" "$file" > "$tmp" && [ -s "$tmp" ]; then
     mv "$tmp" "$file"
-    [ "$file" = "$SCENES_LOCAL" ] && rm -f "$SCENES_CACHE"
+    [ "$file" = "$SCENES_LOCAL" ] && drop_scenes_cache
     return 0
   else
     rm -f "$tmp"; echo "dot: could not write $file" >&2; return 1

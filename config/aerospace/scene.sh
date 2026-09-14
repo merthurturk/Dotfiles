@@ -17,6 +17,7 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$DIR/logging.sh"
 source "$DIR/split-lib.sh"
+source "$DIR/scenes-lib.sh"
 
 LOCAL_STATE="$HOME/Library/Application Support/Google/Chrome/Local State"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/aerospace"
@@ -131,22 +132,19 @@ scene_of() {         # <workspace> -> scene name, or empty
 # --- list -----------------------------------------------------------------
 # Single source of truth for what scenes exist, so the launcher stays in sync.
 
-SCENES_FILE="$DIR/scenes.json"
-
-# scenes.local.json is yours and gitignored; it is merged over the shipped
-# examples, so a fork gets sensible defaults and your own scenes survive a pull.
-#
-# A null in the local file is a tombstone: it is how you delete a scene you did
-# not write. Removing the key would only let the shipped one back in on the
-# next merge, which reads as the delete having silently failed.
-if [ -f "$DIR/scenes.local.json" ]; then
-  _merged="$(mktemp)"
-  trap 'rm -f "$_merged"' EXIT
-  if jq -s '.[0] * .[1] | with_entries(select(.value != null))' \
-       "$DIR/scenes.json" "$DIR/scenes.local.json" > "$_merged" 2>/dev/null; then
-    SCENES_FILE="$_merged"
+# The merge, the tombstone rule and the cache all live in scenes-lib.sh, which
+# the bar sources too. SCENES_FILE is a materialised copy of the merged set so
+# the rest of this file can keep passing a path to jq.
+_SCENES_FILE=""
+scenes_file() {
+  if [ -z "$_SCENES_FILE" ]; then
+    _SCENES_FILE="$(mktemp)"
+    scenes_merged > "$_SCENES_FILE"
   fi
-fi
+  printf '%s' "$_SCENES_FILE"
+}
+SCENES_FILE="$(scenes_file)"
+trap 'rm -f "$_SCENES_FILE"' EXIT
 
 # Stage on demand and print what the previous session had, as
 # "<workspace>\t<scene>" per line. The capability needs this before anything
@@ -166,7 +164,7 @@ fi
 # exist. A temp file would not outlive this process, so hand over the JSON --
 # one subprocess, and no second implementation of the merge to drift from.
 if [ "${1:-}" = "--scenes-json" ]; then
-  cat "$SCENES_FILE"
+  scenes_merged
   exit 0
 fi
 

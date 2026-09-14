@@ -39,7 +39,6 @@ fi
 FOCUSED="${FOCUSED_WORKSPACE:-$(aerospace list-workspaces --focused)}"
 NL=$'\n'
 SCENES_STATE="${XDG_STATE_HOME:-$HOME/.local/state}/aerospace/scenes"
-SCENES_JSON="$HOME/.config/aerospace/scenes.json"
 
 # --- gather once ----------------------------------------------------------
 
@@ -58,23 +57,15 @@ while IFS= read -r app; do
 "
 done < <(printf '%s\n' "$WINDOWS" | cut -d'|' -f2- | sort -u)
 
-# scenes.local.json overrides the shipped examples; see config/aerospace/scene.sh
-SCENES_LOCAL="$HOME/.config/aerospace/scenes.local.json"
-SCENE_DEFS=""
-if [ -f "$SCENES_JSON" ]; then
-  if [ -f "$SCENES_LOCAL" ]; then
-    # A null in the local file is a tombstone -- a deleted scene. Same rule as
-    # config/aerospace/scene.sh, which owns this merge.
-    SCENE_DEFS="$(jq -s -r '.[0] * .[1] | with_entries(select(.value != null)) |
-      to_entries[] | ["D", .key, (.value.icon // ""), (.value.label // .key),
-                      (.value.badge // "BLUE")] | @tsv' \
-      "$SCENES_JSON" "$SCENES_LOCAL" 2>/dev/null)"
-  else
-    SCENE_DEFS="$(jq -r '
-      to_entries[] | ["D", .key, (.value.icon // ""), (.value.label // .key),
-                      (.value.badge // "BLUE")] | @tsv' "$SCENES_JSON" 2>/dev/null)"
-  fi
-fi
+# The scene definitions, as the TSV this awk pass already expects. The merge,
+# the tombstone rule and the cache belong to scenes-lib.sh, which this sources
+# rather than copies -- it used to carry its own fourth copy of that rule with
+# a comment naming the owner, which is a repo admitting drift rather than
+# preventing it. Sourced, so the repaint path pays no extra process, and the
+# TSV is cached so it pays no jq either.
+# shellcheck source=/dev/null
+source "$HOME/.config/aerospace/scenes-lib.sh"
+SCENE_DEFS="$(scenes_defs_tsv)"
 
 SCENE_STATE=""
 [ -f "$SCENES_STATE" ] && SCENE_STATE="$(sed 's/^/S\t/' "$SCENES_STATE")"

@@ -156,7 +156,7 @@ jq --arg n "$NAME" --arg icon "$ICON" --arg label "$LABEL" --arg badge "$BADGE" 
               + (if $badge != "" then {badge: $badge}            else {} end)
               + (if $ratio != "" then {ratio: ($ratio|tonumber)} else {} end)
               + {windows: $windows})' \
-   "$SCENES_LOCAL" > "$tmp" && mv "$tmp" "$SCENES_LOCAL" && rm -f "$SCENES_CACHE" || {
+   "$SCENES_LOCAL" > "$tmp" && mv "$tmp" "$SCENES_LOCAL" && drop_scenes_cache || {
      rm -f "$tmp"; echo "scene save: could not write $SCENES_LOCAL" >&2; exit 1; }
 
 audit "scene save $NAME ($COUNT window(s) from workspace $WS)"
