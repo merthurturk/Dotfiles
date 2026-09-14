@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+#
+# dot window geometry [--workspace N] [--json]
+#
+# Where every window AeroSpace manages actually is. AeroSpace reports which
+# workspace a window is on but not its frame, and every obvious substitute
+# lies: AppleScript bounds reports a browser window's parked position for any
+# workspace you are not looking at, System Events wants Automation permission
+# per app, and a screenshot cannot see a workspace that is not on screen.
+#
+# The helper reads CGWindowListCopyWindowInfo, which needs no permission and
+# sees everything. Its kCGWindowNumber is the same id AeroSpace uses, so the
+# two lists join on it with no title matching.
+#
+# Read the `visible` column before trusting a width. A window on a hidden
+# workspace is parked off-screen at whatever size it last had -- two windows of
+# a 60/40 scene measured 1852pt and 626pt on a 1710pt display while hidden.
+# That is worth being able to see, which is most of why this exists.
+
+set -u
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+
+GEOMETRY="$DOT_ROOT/config/aerospace/bin/geometry"
+
+if [ "${1:-}" = "--describe" ]; then
+  jq -n '{
+    id: "window.geometry",
+    summary: "Show where every window actually is, including hidden workspaces",
+    args: [{name: "--workspace", required: false},
+           {name: "--json", required: false}],
+    destructive: false,
+    note: "a frame on a hidden workspace is parked, not laid out -- see the visible column"
+  }'
+  exit 0
+fi
+
+WS=""; AS_JSON=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --workspace) WS="${2:-}"; shift 2 ;;
+    --json) AS_JSON=1; shift ;;
+    *) echo "usage: dot window geometry [--workspace N] [--json]" >&2; exit 1 ;;
+  esac
+done
+
+[ -x "$GEOMETRY" ] || { echo "dot: geometry helper not built - run install.sh" >&2; exit 1; }
+
+VISIBLE="$($AEROSPACE list-workspaces --monitor all --visible 2>/dev/null | paste -sd ',' -)"
+
+# AeroSpace first, so only windows it manages are reported -- the raw list is
+# full of JankyBorders overlays, autofill popovers and menu-bar furniture.
+set -- --format '%{window-id}|%{workspace}|%{app-name}|%{monitor-name}'
+if [ -n "$WS" ]; then set -- --workspace "$WS" "$@"; else set -- --monitor all "$@"; fi
+
+ROWS="$(
+  $AEROSPACE list-windows "$@" 2>/dev/null | sed 's/^/A|/'
+  "$GEOMETRY" | awk -F'\t' '{ print "G|" $1 "|" $2 "|" $3 "|" $4 "|" $5 "|" $7 }'
+)"
+
+JSON="$(printf '%s\n' "$ROWS" | jq -R -s --arg visible "$VISIBLE" '
+  ($visible | split(",")) as $vis
+  | split("\n") | map(select(length > 0) | split("|"))
+  | (map(select(.[0] == "G")) | map({key: .[1], value: {x: (.[2]|tonumber), y: (.[3]|tonumber),
+                                                        width: (.[4]|tonumber), height: (.[5]|tonumber),
+                                                        title: (.[6] // "")}}) | from_entries) as $geo
+  | map(select(.[0] == "A"))
+  | map({id: .[1], workspace: .[2], app: .[3], monitor: .[4],
+         visible: (.[2] as $w | $vis | index($w) != null)})
+  | map(. + ($geo[.id] // {}))')"
+
+if [ "$AS_JSON" -eq 1 ]; then
+  printf '%s\n' "$JSON"
+  exit 0
+fi
+
+printf '%s' "$JSON" | jq -r '
+  .[] | [ .id, .workspace, (if .visible then " " else "·" end),
+          (.x|tostring), (.y|tostring), (.width|tostring), (.height|tostring),
+          .app ] | @tsv' \
+  | awk -F'\t' 'BEGIN { printf "%-8s %-3s %s %6s %6s %7s %7s  %s\n",
+                        "id","ws","","x","y","width","height","app" }
+                { printf "%-8s %-3s %s %6s %6s %7s %7s  %s\n", $1,$2,$3,$4,$5,$6,$7,$8 }'
+echo "  (· = on a hidden workspace: parked, not laid out)"

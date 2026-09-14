@@ -70,6 +70,9 @@ head_ "Built artefacts"
 [ -x "$REPO/config/aerospace/bin/wallpaper" ] \
   && ok "wallpaper helper built" \
   || no "wallpaper helper not built - swiftc -O -o config/aerospace/bin/wallpaper config/aerospace/src/wallpaper.swift -framework AppKit"
+[ -x "$REPO/config/aerospace/bin/geometry" ] \
+  && ok "geometry helper built" \
+  || no "geometry helper not built - swiftc -O -o config/aerospace/bin/geometry config/aerospace/src/geometry.swift -framework AppKit"
 
 head_ "Capabilities"
 if "$REPO/bin/check-capabilities.sh" >/dev/null 2>&1; then

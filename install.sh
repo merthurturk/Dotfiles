@@ -61,7 +61,7 @@ esac
 
 if command -v swiftc >/dev/null 2>&1; then
   mkdir -p "$DOTFILES/config/aerospace/bin"
-  for helper in picker wallpaper; do
+  for helper in picker wallpaper geometry; do
     log "Building $helper"
     swiftc -O -o "$DOTFILES/config/aerospace/bin/$helper" \
                 "$DOTFILES/config/aerospace/src/$helper.swift" -framework AppKit
