@@ -5,7 +5,7 @@ by how interesting they are to build.
 
 Each says roughly what it costs and — where it matters — what makes it safe.
 Items are removed from this list when they ship, not ticked off: `dot scene
-save` and `dot window send` were both here.
+save`, `dot window send` and `dot window pin` were all here.
 
 ---
 
@@ -13,14 +13,6 @@ save` and `dot window send` were both here.
 
 The bar is: *does this remove a decision, a keystroke, or a trip into a config
 file?*
-
-### Put apps where they belong, automatically
-
-AeroSpace has `on-window-detected`. Say once that Slack lives on `S` and
-Telegram on `M`, and stop putting them there by hand every morning.
-
-*Small — config, not code. Worth a `dot` capability to add a rule from the
-focused window so you never open the TOML.*
 
 ### Theme follows the time of day
 

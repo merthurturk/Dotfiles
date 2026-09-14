@@ -221,6 +221,24 @@ shows the scene's badge instead of app icons.
 Window specs, the close ledger and why windows are moved by id rather than by
 switching workspace: [docs/scenes.md](docs/scenes.md).
 
+## Pinned apps
+
+`dot window pin` says "this app lives here" while you are looking at the window
+that made you think it — which is the only moment you ever remember to.
+
+```sh
+dot window pin S          # Slack opens on workspace S from now on
+dot window pin --list
+dot window pin --off
+```
+
+It writes an AeroSpace `on-window-detected` rule into a marked block in
+`aerospace.toml`, matched on bundle id, and moves the window you are looking at
+to match. The block is still ordinary TOML you can edit by hand; `dot` reads it
+back rather than keeping a second copy. Before installing a rewrite it checks
+that everything outside the block is byte-identical, then that AeroSpace can
+still parse the result, and rolls back if not.
+
 ## The picker
 
 `config/aerospace/src/picker.swift` compiles to a standalone chooser —

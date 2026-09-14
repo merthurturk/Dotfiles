@@ -1,0 +1,200 @@
+#!/usr/bin/env bash
+#
+# dot window pin [workspace] [--off] [--list]
+#
+# "Slack lives on S." AeroSpace can do this itself with on-window-detected;
+# what it can't do is let you say it at the moment you notice, which is while
+# you are looking at the window you just dragged there for the tenth time.
+#
+# Rules are written into aerospace.toml, between markers, in a fixed shape this
+# script also reads back -- so the TOML stays the one source of truth and you
+# can still edit it by hand.
+
+set -u
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+
+TOML="$DOT_ROOT/aerospace.toml"
+BEGIN='# --- pinned apps: managed by `dot window pin` ---------------------------'
+END='# --- end pinned apps ---------------------------------------------------'
+
+# Existing rules as "<app-id>\t<workspace>\t<app name>", from the TOML itself.
+# Regenerating from a side file would mean two sources of truth for one fact,
+# and the one you'd edit by hand would be the one that loses.
+pinned() {
+  awk -v b="$BEGIN" -v e="$END" '
+    $0 == b { inblock = 1; next }
+    $0 == e { inblock = 0 }
+    !inblock { next }
+    /^if\.app-id/ {
+      id = $0; sub(/^[^=]*=[[:space:]]*./, "", id); sub(/'"'"'.*$/, "", id)
+      name = ""
+      if (match($0, /#[[:space:]]*/)) name = substr($0, RSTART + RLENGTH)
+      next
+    }
+    /^run = / {
+      ws = $0; sub(/^.*move-node-to-workspace /, "", ws); sub(/'"'"'.*$/, "", ws)
+      if (id != "") printf "%s\t%s\t%s\n", id, ws, name
+      id = ""; name = ""
+    }
+  ' "$TOML"
+}
+
+focused() { $AEROSPACE list-windows --focused --format "$1" 2>/dev/null; }
+
+if [ "${1:-}" = "--describe" ]; then
+  # The app under the palette is the user's, not the picker's -- read it from
+  # what menu captured before it took focus.
+  wid="${DOT_ORIG_WID:-$(focused '%{window-id}')}"
+  ws="${DOT_ORIG_WS:-$($AEROSPACE list-workspaces --focused 2>/dev/null)}"
+  app=""; appid=""
+  if [ -n "$wid" ]; then
+    IFS='|' read -r appid app <<<"$($AEROSPACE list-windows --all \
+      --format '%{window-id}|%{app-bundle-id}|%{app-name}' \
+      | awk -F'|' -v w="$wid" '$1 == w { print $2 "|" $3; exit }')"
+  fi
+  cur="$(pinned | awk -F'\t' -v a="$appid" '$1 == a { print $2; exit }')"
+
+  jq -n --arg app "$app" --arg ws "$ws" --arg cur "$cur" --arg id "$appid" '{
+    id: "window.pin",
+    summary: "Always open this app on a given workspace",
+    args: [{name:"workspace", required:false, default:"the current one"},
+           {name:"--off", required:false}, {name:"--list", required:false}],
+    destructive: false,
+    guard: "edits only its own marked block in aerospace.toml",
+    verify: "dot window pin --list",
+    undo: "dot window pin --off",
+    instances: (if $id == "" then []
+                elif $cur == "" then
+                  [{label: ("Always open " + $app + " on workspace " + $ws),
+                    detail: "adds an AeroSpace rule", args: [$ws]}]
+                elif $cur != $ws then
+                  [{label: ("Move " + $app + " home: workspace " + $ws),
+                    detail: ("pinned to " + $cur + " now"), args: [$ws]},
+                   {label: ("Unpin " + $app), detail: ("from workspace " + $cur),
+                    args: ["--off"]}]
+                else
+                  [{label: ("Unpin " + $app), detail: ("from workspace " + $cur),
+                    args: ["--off"]}] end)
+  }'
+  exit 0
+fi
+
+if [ "${1:-}" = "--list" ]; then
+  rules="$(pinned)"
+  [ -n "$rules" ] || { echo "no apps are pinned"; exit 0; }
+  printf '%s\n' "$rules" | awk -F'\t' '{ printf "  %-24s -> workspace %s\n", ($3 ? $3 : $1), $2 }'
+  exit 0
+fi
+
+WS=""; OFF=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --off) OFF=1; shift ;;
+    -*) echo "window pin: unknown option $1" >&2; exit 1 ;;
+    *) [ -z "$WS" ] && WS="$1"; shift ;;
+  esac
+done
+
+WID="${DOT_ORIG_WID:-$(focused '%{window-id}')}"
+[ -n "$WID" ] || { echo "window pin: no focused window" >&2; exit 1; }
+IFS='|' read -r APPID APP <<<"$($AEROSPACE list-windows --all \
+  --format '%{window-id}|%{app-bundle-id}|%{app-name}' \
+  | awk -F'|' -v w="$WID" '$1 == w { print $2 "|" $3; exit }')"
+[ -n "${APPID:-}" ] || { echo "window pin: could not identify that window's app" >&2; exit 1; }
+[ -n "$WS" ] || WS="${DOT_ORIG_WS:-$($AEROSPACE list-workspaces --focused)}"
+
+# Rebuild the whole managed block from the rules that should be in it. Editing
+# in place would mean a second parser that has to agree with the first one.
+RULES="$(pinned | awk -F'\t' -v a="$APPID" '$1 != a')"
+if [ "$OFF" -eq 0 ]; then
+  RULES="$(printf '%s\n%s\t%s\t%s\n' "$RULES" "$APPID" "$WS" "$APP" | grep -v '^$')"
+fi
+
+# With nothing pinned there is nothing to manage: take the block back out
+# rather than leaving an empty one behind to explain itself.
+BLOCK=""
+if [ -n "$RULES" ]; then
+  BLOCK="$BEGIN
+# Matched on bundle id, which survives an app being renamed. The comment is
+# what \`dot window pin\` shows you; the rule does not depend on it."
+  while IFS=$'\t' read -r id ws name; do
+    [ -n "$id" ] || continue
+    BLOCK="$BLOCK
+
+[[on-window-detected]]
+if.app-id = '$id'  # $name
+run = ['move-node-to-workspace $ws']"
+  done <<<"$RULES"
+  BLOCK="$BLOCK
+
+$END"
+fi
+
+# The block goes through a file, not awk -v: macOS awk rejects a literal
+# newline in a -v assignment, and does it by failing mid-parse and writing
+# nothing -- which, copied over the config, is an empty config. AeroSpace
+# accepts an empty config as valid, so the parse check below would not have
+# caught it either. It has to be impossible instead of merely checked.
+tmp="$(mktemp)"; blockfile="$(mktemp)"
+trap 'rm -f "$tmp" "$blockfile" "${backup:-}"' EXIT
+[ -n "$BLOCK" ] && printf '%s\n' "$BLOCK" > "$blockfile"
+
+if grep -qF "$BEGIN" "$TOML"; then
+  awk -v b="$BEGIN" -v e="$END" -v bf="$blockfile" '
+    $0 == b { while ((getline line < bf) > 0) print line; skip = 1; next }
+    $0 == e { skip = 0; next }
+    !skip' "$TOML" > "$tmp" || { echo "window pin: could not rewrite the config" >&2; exit 1; }
+  # Removing the block can leave the file ending in blank lines.
+  awk '/^[[:space:]]*$/ { blanks++; next }
+       { while (blanks-- > 0) print ""; blanks = 0; print }' "$tmp" > "$tmp.trim" \
+    && mv "$tmp.trim" "$tmp"
+else
+  # Array-of-tables headers have to come after every bare key in the file, or
+  # those keys land inside the rule instead of at the root. The end is the only
+  # place that is unconditionally safe.
+  { cat "$TOML"; printf '\n'; cat "$blockfile"; } > "$tmp"
+fi
+
+# Everything outside the managed block must be byte-identical. This is the
+# check that matters: "the result parses" would have been happy with a file
+# that lost the entire config, which is exactly the failure that happened.
+# Trailing blank lines are not content: appending the block for the first time
+# adds a separator line that belongs to neither side.
+strip_block() {
+  awk -v b="$BEGIN" -v e="$END" '
+    $0 == b { skip = 1 } { if (!skip) print } $0 == e { skip = 0 }' "$1" \
+  | awk '/^[[:space:]]*$/ { blanks++; next } { while (blanks-- > 0) print ""; blanks = 0; print }'
+}
+if ! diff -q <(strip_block "$TOML") <(strip_block "$tmp") >/dev/null; then
+  echo "window pin: rewrite would have changed the rest of the config, refusing" >&2
+  exit 1
+fi
+
+# Never leave a config AeroSpace can't read -- that is a broken window manager,
+# not a failed command. reload-config validates ~/.aerospace.toml and takes no
+# path, so the check happens after the write; keep the old file to hand.
+backup="$(mktemp)"
+cat "$TOML" > "$backup"
+cat "$tmp" > "$TOML"
+if ! $AEROSPACE reload-config --dry-run >/dev/null 2>&1; then
+  echo "window pin: the resulting config is invalid, nothing changed" >&2
+  $AEROSPACE reload-config --dry-run 2>&1 | sed 's/^/  /' >&2
+  cat "$backup" > "$TOML"
+  exit 1
+fi
+
+if [ "$OFF" -eq 1 ]; then
+  audit "window pin --off $APP ($APPID)"
+  echo "$APP is no longer pinned"
+else
+  audit "window pin $APP ($APPID) -> workspace $WS"
+  echo "$APP will open on workspace $WS"
+  # Apply it to the window in front of you as well. The rule only fires when a
+  # window appears, and waiting until the next launch to see whether you got it
+  # right is a poor way to find out. Compare against where the window actually
+  # is, not where you are -- from the command line those are not the same.
+  now="$($AEROSPACE list-windows --all --format '%{window-id}|%{workspace}' \
+         | awk -F'|' -v w="$WID" '$1 == w { print $2; exit }')"
+  [ "$WS" = "$now" ] || $AEROSPACE move-node-to-workspace --window-id "$WID" "$WS" 2>/dev/null
+fi
+$AEROSPACE reload-config >/dev/null 2>&1 || true
