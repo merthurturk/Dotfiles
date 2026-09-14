@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+#
+# dot scene restore [--list] [--forget]
+#
+# Puts back the scenes you had open when the machine last restarted.
+#
+# An offer, not an action: nothing happens at login, and no launchd agent is
+# installed. The row appears in the launcher when there is something to put
+# back, and stops appearing once you have taken it or dismissed it. Replaying
+# at login would mean deciding, on your behalf and while you are not watching,
+# that an empty desktop should fill itself.
+
+set -u
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+
+SCENE_SH="$DOT_ROOT/config/aerospace/scene.sh"
+LEDGER="$STATE_DIR/scenes"
+
+# "<workspace>\t<scene>" for each scene of the previous session that is still
+# defined and is not already open. scene.sh does the staging: it owns the
+# ledger, and the move has to happen before anything prunes it.
+pending() {
+  "$SCENE_SH" --previous-session 2>/dev/null | while IFS=$'\t' read -r ws name; do
+    [ -n "${name:-}" ] || continue
+    "$SCENE_SH" --scenes-json 2>/dev/null | jq -e --arg n "$name" 'has($n)' >/dev/null 2>&1 \
+      || continue
+    awk -F'\t' -v s="$name" '$2 == s { found = 1 } END { exit !found }' "$LEDGER" 2>/dev/null \
+      && continue
+    printf '%s\t%s\n' "$ws" "$name"
+  done
+}
+
+if [ "${1:-}" = "--describe" ]; then
+  rows="$(pending)"
+  n=0; [ -n "$rows" ] && n="$(printf '%s\n' "$rows" | grep -c .)"
+  names="$(printf '%s\n' "$rows" | cut -f2 | paste -sd ', ' -)"
+  jq -n --argjson n "$n" --arg names "$names" '{
+    id: "scene.restore",
+    summary: "Reopen the scenes that were open before the last restart",
+    args: [{name:"--list", required:false}, {name:"--forget", required:false}],
+    destructive: false,
+    guard: "opens onto empty workspaces only, and never touches a window that is already open",
+    verify: "dot scene list --json",
+    instances: (if $n == 0 then []
+                else [{label: ("Restore " + ($n|tostring) + " scene" + (if $n == 1 then "" else "s" end) + " from before the restart"),
+                       detail: $names, args: []}] end)
+  }'
+  exit 0
+fi
+
+case "${1:-}" in
+  --forget) "$SCENE_SH" --forget-previous; audit "scene restore --forget"
+            echo "forgot the previous session"; exit 0 ;;
+  --list)   rows="$(pending)"
+            [ -n "$rows" ] || { echo "nothing to restore"; exit 0; }
+            printf '%s\n' "$rows" | awk -F'\t' '{ printf "  %-16s was on workspace %s\n", $2, $1 }'
+            exit 0 ;;
+  "") ;;
+  *) echo "usage: dot scene restore [--list] [--forget]" >&2; exit 1 ;;
+esac
+
+ROWS="$(pending)"
+[ -n "$ROWS" ] || { echo "scene restore: nothing to restore" >&2; exit 1; }
+
+# SCENE_WS asks for the workspace it was on; scene.sh ignores it unless that
+# workspace is empty, so a restore can never land on top of anything.
+restored=0
+while IFS=$'\t' read -r ws name; do
+  [ -n "${name:-}" ] || continue
+  if SCENE_WS="$ws" "$SCENE_SH" "$name" >/dev/null 2>&1; then
+    restored=$((restored + 1))
+    printf '  %s\n' "$name"
+  else
+    printf '  %s -- could not open\n' "$name" >&2
+  fi
+done <<<"$ROWS"
+
+# Only once they are back. Failing halfway and forgetting anyway would lose the
+# one record of what you had.
+[ "$restored" -gt 0 ] && "$SCENE_SH" --forget-previous
+audit "scene restore ($restored scene(s))"
+printf 'restored %s scene(s)\n' "$restored"

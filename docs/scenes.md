@@ -134,6 +134,30 @@ already has the ledger in memory, so this costs no extra process on the repaint
 path. The ledger, not the history, decides whether the scene is still real: a
 closed scene leaves its entry behind and is skipped.
 
+## After a restart
+
+```sh
+dot scene restore          # put back what was open before the reboot
+dot scene restore --list
+dot scene restore --forget
+```
+
+An offer, not an action. Nothing runs at login and no agent is installed: the
+row appears in the launcher when there is something to put back, and stops
+appearing once you have taken it or dismissed it. Replaying at login would mean
+deciding, while you are not watching, that an empty desktop should fill itself.
+
+How it knows: a ledger written **before the current boot** describes the
+previous session — every window in it went away with the machine. The first
+thing to touch the ledger after a restart moves it aside to `scenes-previous`
+rather than letting the next prune drop the lot. The test is the boot clock and
+not "are its windows gone", because that is also exactly what closing a scene
+by hand looks like.
+
+Each scene asks for the workspace it was on and gets it only if that workspace
+is empty, so a restore can never land on top of anything. Scenes you have since
+deleted, and scenes that are already open, are skipped.
+
 ## Badges
 
 A workspace running a scene shows the scene's glyph and name in its colour

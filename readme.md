@@ -204,6 +204,7 @@ A scene is a named window layout opened onto a fresh workspace.
 dot scene open chill      dot scene list
 dot scene save work       dot scene edit
 dot scene last            dot scene close 3
+dot scene restore         # put back what was open before the reboot
 ```
 
 `dot scene save` is how you make one: arrange a workspace by hand, name it, and

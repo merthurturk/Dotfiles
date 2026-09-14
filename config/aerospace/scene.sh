@@ -63,12 +63,38 @@ forget_scene() {     # <workspace>
   [ -f "$tmp" ] && mv "$tmp" "$STATE_FILE"
 }
 
+PREV_FILE="$STATE_DIR/scenes-previous"   # the ledger as it was before a restart
+
+# A ledger written before this boot describes the previous session: every
+# window in it went away with the machine, and the next prune would drop the
+# lot without anyone getting to see what was open.
+#
+# Move it aside once, the first time anything touches the ledger after a
+# restart, so `dot scene restore` still has something to offer. Keyed on the
+# boot clock rather than on the windows being gone, because "all its windows
+# are gone" is also what closing a scene by hand looks like.
+stage_previous_session() {
+  [ -s "$STATE_FILE" ] || return 0
+  local boot mtime
+  # "{ sec = 1785738856, usec = 84400 } Mon Aug  3 ...". Anchored on the
+  # opening brace: a greedy .* before "sec = " matches the *last* one, which is
+  # "usec = ", and hands back a boot time in 1970.
+  boot="$(sysctl -n kern.boottime 2>/dev/null | sed -n 's/^{ *sec *= *\([0-9][0-9]*\).*/\1/p')"
+  [ -n "$boot" ] || return 0
+  mtime="$(stat -f %m "$STATE_FILE" 2>/dev/null)"
+  [ -n "$mtime" ] || return 0
+  [ "$mtime" -lt "$boot" ] || return 0
+  mv "$STATE_FILE" "$PREV_FILE"
+  : > "$STATE_FILE"
+}
+
 # Drops entries whose windows are all gone.
 #
 # Keyed on the scene's *own* windows, not on the workspace having anything at
 # all: an entry that outlives its windows is how `close` ends up destroying
 # whatever you have since put there.
 prune_scenes() {
+  stage_previous_session
   [ -f "$STATE_FILE" ] || return 0
   local tmp="$STATE_FILE.tmp" ws name ids
   : > "$tmp"
@@ -102,6 +128,20 @@ if [ -f "$DIR/scenes.local.json" ]; then
        "$DIR/scenes.json" "$DIR/scenes.local.json" > "$_merged" 2>/dev/null; then
     SCENES_FILE="$_merged"
   fi
+fi
+
+# Stage on demand and print what the previous session had, as
+# "<workspace>\t<scene>" per line. The capability needs this before anything
+# else has had a chance to prune, so it cannot wait for a prune to do it.
+if [ "${1:-}" = "--previous-session" ]; then
+  stage_previous_session
+  [ -f "$PREV_FILE" ] && cut -f1,2 "$PREV_FILE"
+  exit 0
+fi
+
+if [ "${1:-}" = "--forget-previous" ]; then
+  rm -f "$PREV_FILE"
+  exit 0
 fi
 
 # The merged set, for anything outside this file that needs to know what scenes
@@ -231,7 +271,15 @@ if [ -n "$EXISTING" ]; then
 fi
 
 # A scene wants a clean workspace, not whatever is already open.
-WS="$($AEROSPACE list-workspaces --monitor all --empty | head -1)"
+#
+# SCENE_WS asks for a particular one -- `dot scene restore` uses it to put a
+# scene back where it was before the reboot -- but only if it is empty. A
+# preference cannot be allowed to override the one rule that keeps this safe.
+WS=""
+if [ -n "${SCENE_WS:-}" ]; then
+  $AEROSPACE list-workspaces --monitor all --empty | grep -qx "$SCENE_WS" && WS="$SCENE_WS"
+fi
+[ -n "$WS" ] || WS="$($AEROSPACE list-workspaces --monitor all --empty | head -1)"
 if [ -z "$WS" ]; then
   echo "scene: no empty workspace available" >&2
   exit 1

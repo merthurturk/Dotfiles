@@ -4,25 +4,13 @@ Ideas, not commitments. Ordered by how much they'd change an ordinary day, not
 by how interesting they are to build.
 
 Each says roughly what it costs and — where it matters — what makes it safe.
-Items are removed from this list when they ship, not ticked off: `dot scene
-save`, `dot window send`, `dot window pin`, `dot theme auto` and `dot scene
-last` were all here.
+Items are removed from this list when they ship, not ticked off.
 
----
-
-## Daily convenience
-
-The bar is: *does this remove a decision, a keystroke, or a trip into a config
-file?*
-
-### Restore the scenes you had
-
-After a reboot, put back the workspaces you were using. The ledger already
-records which scene is on which workspace — this is that, persisted across a
-restart and replayed.
-
-*Medium, and it needs care: replaying should be opt-in, and never clobber
-windows that are already open.*
+**The Daily convenience section is empty**, which is the point of having had
+one. `dot scene save`, `dot scene edit`, `dot scene last`, `dot scene restore`,
+`dot window send`, `dot window pin` and `dot theme auto` were all in it. What is
+left below is distribution and platform work — worth doing, but none of it
+changes your Tuesday.
 
 ---
 
