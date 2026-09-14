@@ -114,6 +114,33 @@ through `dot scene edit`, where you have already said which scene you mean — a
 destructive action one keystroke from the top of a palette is how you delete the
 wrong thing.
 
+## Moving one
+
+```sh
+dot scene move 5            # take this scene to workspace 5
+dot scene move 5 --stay     # without going with it
+dot scene move 5 --from 3
+```
+
+Only the windows the scene opened travel — anything that has since landed on
+that workspace stays put, the same rule that keeps `dot scene close` safe. They
+arrive in the order they were sitting in, not the order the scene opened them
+in, so a layout you rearranged by hand survives the move. The ledger goes with
+them, or `close` would afterwards be aiming at whatever you have since put on
+the old workspace.
+
+Two things had to be learned the hard way here, and both come from the same
+fact: **AeroSpace gives a hidden workspace no real geometry.** Its windows sit
+parked off-screen at whatever size they last had — two windows of a two-window
+scene measured 1852pt and 626pt on a 1710pt display while hidden.
+
+So re-tiling into the target spreads the windows evenly and the scene loses its
+split (a 60/40 scene came out 840/840), *and* the fix for that cannot be applied
+until the workspace is visible. `dot scene move` switches first and resizes
+second. With `--stay` there is nothing to aim at, so the split is left alone
+rather than aimed at a parked layout — which is what made an earlier version
+land a 97/3 split.
+
 ## Bouncing between two
 
 ```sh

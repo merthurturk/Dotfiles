@@ -38,10 +38,10 @@ remember_scene() {
   prune_scenes
   local ws="$1" name="$2"; shift 2
   local ids; ids="$(printf '%s,' "$@")"; ids="${ids%,}"
-  local tmp="$STATE_FILE.tmp"
+  local tmp; tmp="$(mktemp)"
   [ -f "$STATE_FILE" ] && grep -v "^$ws	" "$STATE_FILE" > "$tmp" 2>/dev/null
   printf '%s\t%s\t%s\n' "$ws" "$name" "$ids" >> "$tmp"
-  [ -f "$tmp" ] && mv "$tmp" "$STATE_FILE"
+  mv "$tmp" "$STATE_FILE"
 }
 
 # Window ids a scene opened that are still open.
@@ -58,9 +58,9 @@ scene_live_windows() {   # <workspace>
 
 forget_scene() {     # <workspace>
   [ -f "$STATE_FILE" ] || return 0
-  local tmp="$STATE_FILE.tmp"
+  local tmp; tmp="$(mktemp)"
   grep -v "^$1	" "$STATE_FILE" > "$tmp" 2>/dev/null || true
-  [ -f "$tmp" ] && mv "$tmp" "$STATE_FILE"
+  mv "$tmp" "$STATE_FILE"
 }
 
 PREV_FILE="$STATE_DIR/scenes-previous"   # the ledger as it was before a restart
@@ -88,7 +88,14 @@ stage_previous_session() {
   : > "$STATE_FILE"
 }
 
-# Drops entries whose windows are all gone.
+# Drops entries whose windows are all gone, and collapses any workspace that
+# somehow has two lines -- the last one wins.
+#
+# These three functions used to share one temp path, $STATE_FILE.tmp. Nothing
+# here runs concurrently on purpose, but remember_scene calls prune_scenes and
+# both then wrote and moved the same file; a failed mv left the ledger with a
+# duplicated line and "mv: scenes.tmp: No such file or directory" in the log.
+# mktemp each, so they cannot collide however they end up nested.
 #
 # Keyed on the scene's *own* windows, not on the workspace having anything at
 # all: an entry that outlives its windows is how `close` ends up destroying
@@ -96,12 +103,12 @@ stage_previous_session() {
 prune_scenes() {
   stage_previous_session
   [ -f "$STATE_FILE" ] || return 0
-  local tmp="$STATE_FILE.tmp" ws name ids
-  : > "$tmp"
+  local tmp ws name ids; tmp="$(mktemp)"
   while IFS=$'\t' read -r ws name ids; do
     [ -n "${ws:-}" ] || continue
     [ -n "$(scene_live_windows "$ws")" ] && printf '%s\t%s\t%s\n' "$ws" "$name" "$ids"
-  done < "$STATE_FILE" >> "$tmp"
+  done < "$STATE_FILE" \
+    | awk -F'\t' '{ line[$1] = $0 } END { for (w in line) print line[w] }' > "$tmp"
   mv "$tmp" "$STATE_FILE"
 }
 
@@ -178,6 +185,117 @@ if [ "${1:-}" = "--open-scenes" ]; then
 fi
 
 # --- close ----------------------------------------------------------------
+
+# --- move -----------------------------------------------------------------
+# scene.sh move <target-workspace> [source-workspace]
+#
+# Moves a whole scene somewhere else. Only the windows the scene opened travel:
+# anything else that has since landed on that workspace stays where it is, for
+# the same reason `close` only ever closes the scene's own windows.
+if [ "${1:-}" = "move" ]; then
+  shift
+  STAY=0
+  if [ "${1:-}" = "--stay" ]; then STAY=1; shift; fi
+  TARGET="${1:-}"
+  if [ -z "$TARGET" ]; then
+    echo "scene: usage: scene.sh move [--stay] <workspace> [from-workspace]" >&2
+    exit 1
+  fi
+  FROM="${2:-$($AEROSPACE list-workspaces --focused)}"
+
+  NAME="$(scene_of "$FROM")"
+  if [ -z "$NAME" ]; then
+    echo "scene: workspace $FROM is not running a scene." >&2
+    if [ -s "$STATE_FILE" ]; then
+      echo "scene: open scenes are:" >&2
+      sed 's/^/  workspace /;s/\t/  -> /' "$STATE_FILE" >&2
+    fi
+    exit 1
+  fi
+  if [ "$TARGET" = "$FROM" ]; then
+    echo "scene: $NAME is already on workspace $TARGET" >&2
+    exit 0
+  fi
+  if ! $AEROSPACE list-workspaces --monitor all | grep -qx "$TARGET"; then
+    echo "scene: no workspace '$TARGET'" >&2
+    exit 1
+  fi
+
+  # In the order they sit on the source workspace, not the order the scene
+  # opened them in. You may have rearranged them since, and a move should not
+  # quietly reshuffle a layout you arranged by hand.
+  #
+  # `|| [ -n "$wid" ]`: scene_live_windows prints its ids without a trailing
+  # newline, so read returns false on the last one -- which dropped the final
+  # window of every scene, leaving it behind and out of the ledger.
+  LIVE=""
+  while read -r wid || [ -n "$wid" ]; do
+    [ -n "$wid" ] && LIVE="$LIVE $wid"
+  done < <(scene_live_windows "$FROM" | tr ' ' '\n')
+  MOVE_WIDS=()
+  while read -r wid; do
+    case " $LIVE " in *" $wid "*) MOVE_WIDS+=("$wid") ;; esac
+  done < <($AEROSPACE list-windows --workspace "$FROM" --format '%{window-id}')
+
+  if [ "${#MOVE_WIDS[@]}" -eq 0 ]; then
+    forget_scene "$FROM"
+    echo "scene: $NAME has no windows left to move" >&2
+    exit 1
+  fi
+
+  # One round-trip, in the scene's own order, so the windows arrive left to
+  # right the way they were rather than in whatever order the moves land.
+  batch=""
+  for wid in "${MOVE_WIDS[@]}"; do
+    batch="$batch${batch:+; }move-node-to-workspace --window-id $wid $TARGET"
+    batch="$batch; layout tiling --window-id $wid; layout tiles --window-id $wid"
+  done
+  $AEROSPACE eval "$batch" >/dev/null 2>&1 || true
+
+  # eval returns when the commands are accepted, not when they have taken
+  # effect, so wait for the windows to actually be on the target before
+  # recording that they are.
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+    placed="$($AEROSPACE list-windows --workspace "$TARGET" --format '%{window-id}')"
+    settled=1
+    for wid in "${MOVE_WIDS[@]}"; do
+      printf '%s\n' "$placed" | grep -qx "$wid" || settled=0
+    done
+    [ "$settled" -eq 1 ] && break
+    sleep 0.02
+  done
+
+  # The ledger moves with it, or `close` would aim at the workspace the scene
+  # used to be on -- which by then is whatever you have put there since.
+  forget_scene "$FROM"
+  remember_scene "$TARGET" "$NAME" "${MOVE_WIDS[@]}"
+
+  # Go with it by default: you asked to move the thing you were looking at, so
+  # being left staring at where it used to be is not the outcome you wanted.
+  if [ "$STAY" -eq 0 ]; then
+    $AEROSPACE eval "workspace $TARGET; focus --window-id ${MOVE_WIDS[0]}" >/dev/null 2>&1 \
+      || $AEROSPACE workspace "$TARGET"
+  fi
+
+  # Put the ratio back, and only now: re-tiling into a workspace spreads the
+  # windows evenly, so the scene loses its split in the move. Measured -- a
+  # 60/40 scene came out 840/840 on a 1710pt display.
+  #
+  # It has to happen after the switch above, because AeroSpace gives a hidden
+  # workspace no real geometry at all: its windows sit parked off-screen at
+  # whatever size they last had, and two windows of that same scene measured
+  # 1852pt and 626pt while hidden. Resizing into that is aiming at nothing,
+  # which is what made an earlier version land a 97/3 split. With --stay there
+  # is nothing to aim at, so the split is left for the next time the workspace
+  # is shown.
+  if [ "$STAY" -eq 0 ] && [ "${#MOVE_WIDS[@]}" -ge 2 ]; then
+    RATIO="$(jq -r --arg s "$NAME" '.[$s].ratio // 0.5' "$SCENES_FILE" 2>/dev/null)"
+    split_resize "${MOVE_WIDS[0]}" "${RATIO:-0.5}" || true
+  fi
+
+  echo "scene: moved $NAME from workspace $FROM to $TARGET"
+  exit 0
+fi
 
 if [ "${1:-}" = "close" ]; then
   shift

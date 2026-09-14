@@ -72,6 +72,21 @@ it looks fine and renders no Berkeley at all. Weight comes from the family name:
 Berkeley Mono is commercial and can't ship here, so `fonts.sh` probes for it and
 falls back to Hack.
 
+## y_offset belongs with the font
+
+`sketchybarrc` sets each workspace pill up once, including `label.y_offset=-1`,
+which is tuned for the app-glyph font. But `plugins/aerospace.sh` swaps
+`label.font` per state — app glyphs on an ordinary workspace, text on one
+running a scene — and for a long time it left the offset behind. Scene text sat
+1.75pt below the workspace number beside it.
+
+Measured off a screenshot rather than guessed: the ink centre of "DEV" was at
+51.5 where the "1" next to it was at 48.0, and the pill centre at 47.5. Setting
+`label.y_offset` alongside `label.font` puts all three within half a pixel.
+
+Anything the plugin varies per state has to be set by the plugin. A property
+set once at creation is a property tuned for exactly one of the states.
+
 ## Colour
 
 `config/sketchybar/colors.sh` is a **symlink into the active theme** — see

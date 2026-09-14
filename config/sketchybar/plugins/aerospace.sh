@@ -135,12 +135,18 @@ while IFS= read -r a; do args+=("$a"); done < <(
         tt = (b in tint) ? tint[b] : o_bg
         ee = (b in edge) ? edge[b] : o_bd
         dd = (b in deep) ? deep[b] : o_fg
+        # y_offset travels with the font. sketchybarrc sets -1 once, at item
+        # creation, tuned for the app-glyph font -- but this plugin swaps the
+        # label font per state and was leaving the offset behind, so scene text
+        # sat 1.75pt below the workspace number beside it. Measured off a
+        # screenshot: ink centre 51.5 against 48.0 for the number.
+        # (No apostrophes in here: the whole awk program is single-quoted.)
         label = sIcon[s] " " sLabel[s]
-        font = scene_font; pad = 2; draw = "on"; ldraw = "on"
+        font = scene_font; pad = 2; draw = "on"; ldraw = "on"; yoff = 1
         if (ws == focused) { bg = dd; fg = base; bd = dd }
         else               { bg = tt; fg = dd;   bd = ee }
       } else {
-        label = icons[ws]; font = app_font; pad = 4
+        label = icons[ws]; font = app_font; pad = 4; yoff = -1
         ldraw = (label == "") ? "off" : "on"
         if (ws == focused)   { bg = a_bg; fg = a_fg; bd = a_bd; draw = "on" }
         else if (label != "") { bg = o_bg; fg = o_fg; bd = o_bd; draw = "on" }
@@ -155,6 +161,7 @@ while IFS= read -r a; do args+=("$a"); done < <(
       print "label=" label
       print "label.font=" font
       print "label.padding_left=" pad
+      print "label.y_offset=" yoff
       print "label.drawing=" ldraw
     }'
 )
