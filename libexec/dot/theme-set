@@ -137,6 +137,18 @@ fi
 
 echo "theme: $THEME"
 echo "$appearance_note"
+
+# Say so if something else is going to undo this. `dot theme auto` switches
+# back at the next transition, and finding that out at dusk, with no idea what
+# did it, is the kind of surprise that makes a setup feel haunted.
+if launchctl print "gui/$(id -u)/sh.dotfiles.theme-auto" >/dev/null 2>&1; then
+  auto_half="$([ "$APPEARANCE" = dark ] && echo dark || echo light)"
+  auto_pref="$(sed -n "s/^$auto_half=//p" "$STATE_DIR/theme-auto" 2>/dev/null | head -1)"
+  if [ -n "$auto_pref" ] && [ "$auto_pref" != "$THEME" ]; then
+    echo "  theme auto is on and will put $auto_pref back -- keep this one with:"
+    echo "    dot theme auto --$auto_half $THEME"
+  fi
+fi
 echo "  bar reloaded."
 [ -n "$outlines" ] && echo "$outlines"
 if ps -Ao comm= | grep -qi 'Ghostty\.app'; then

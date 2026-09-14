@@ -76,6 +76,24 @@ pressed it from outside. It was removed: it burned a global chord, and it could
 not bootstrap — a running Ghostty only knows the keybinds it launched with, so
 the chord did nothing until Ghostty had already been reloaded by hand.
 
+## Following the sun
+
+```sh
+dot theme auto on         # light by day, dark after sunset
+dot theme auto --dark synthwave
+dot theme auto off
+```
+
+Sunset comes from Night Shift's own calculation, which macOS has already done
+for your location — no new permission, and no almanac in here. With no location
+set for Night Shift it falls back to 07:00–19:00 and says so.
+
+Turning it on keeps the theme you are already using for its own half of the
+day, and only picks the other one. A launchd agent checks every ten minutes and
+exits immediately when the right theme is already on, so the switch happens once
+at dusk rather than being a thing that keeps happening to you. Setting a theme
+by hand while it is on tells you that it will be put back, and how to keep it.
+
 ## The desktop picture and the screen saver
 
 ```sh

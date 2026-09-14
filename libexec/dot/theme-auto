@@ -1,0 +1,166 @@
+#!/usr/bin/env bash
+#
+# dot theme auto [on|off] [--light <theme>] [--dark <theme>] [--apply]
+#
+# Light while it's light. macOS already knows when the sun sets here -- Night
+# Shift computes it -- so this asks that rather than making you pick an hour,
+# and falls back to fixed hours when Night Shift has no location.
+#
+# A launchd agent runs --apply every ten minutes. --apply does nothing at all
+# when the right theme is already on, so the switch happens once, at dusk.
+
+set -u
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+
+THEMES="$DOT_ROOT/themes"
+PREFS="$STATE_DIR/theme-auto"
+AGENT="sh.dotfiles.theme-auto"
+PLIST="$HOME/Library/LaunchAgents/$AGENT.plist"
+
+appearance_of() { jq -r '.appearance // "light"' "$THEMES/$1/meta.json" 2>/dev/null; }
+
+# Default to the theme you are already on for its own half of the day. Picking
+# the first one on disk instead would mean that turning this on changed the
+# look you had deliberately chosen, which is not what "follow the sun" asked
+# for. The other half falls back to the first theme of that appearance, so this
+# still works on a fork that ships neither default.
+default_for() {
+  local cur; cur="$(cat "$STATE_DIR/theme" 2>/dev/null)"
+  if [ -n "$cur" ] && [ -d "$THEMES/$cur" ] && [ "$(appearance_of "$cur")" = "$1" ]; then
+    printf '%s' "$cur"; return
+  fi
+  local t; for t in "$THEMES"/*/; do
+    [ "$(appearance_of "$(basename "$t")")" = "$1" ] && { basename "$t"; return; }
+  done
+}
+
+pref() { sed -n "s/^$1=//p" "$PREFS" 2>/dev/null | head -1; }
+LIGHT="$(pref light)"; DARK="$(pref dark)"
+[ -n "$LIGHT" ] || LIGHT="$(default_for light)"
+[ -n "$DARK" ]  || DARK="$(default_for dark)"
+
+enabled() { [ -f "$PLIST" ] && launchctl print "gui/$(id -u)/$AGENT" >/dev/null 2>&1; }
+
+SUN="$STATE_DIR/sun"   # "<yyyy-mm-dd> <sunrise epoch> <sunset epoch>"
+
+# Night Shift's own sunrise/sunset, already computed from the location macOS
+# has -- no new permission, and no almanac in here.
+#
+# Cached for the day it is about, because --describe runs on every ⌥space and
+# corebrightnessdiag costs ~35ms. Keyed on the date rather than an age: times
+# from yesterday would read as "the sun set 24 hours ago", which is dark all
+# morning. Off by a date, not by a duration.
+sun_times() {
+  local today line out rise set
+  today="$(date +%F)"
+  line="$(cat "$SUN" 2>/dev/null)"
+  case "$line" in "$today "*) printf '%s' "${line#* }"; return 0 ;; esac
+
+  out="$(/usr/libexec/corebrightnessdiag nightshift-internal 2>/dev/null)"
+  rise="$(printf '%s' "$out" | sed -n 's/^[[:space:]]*sunrise = "\(.*\)";[[:space:]]*$/\1/p' | head -1)"
+  set="$( printf '%s' "$out" | sed -n 's/^[[:space:]]*sunset = "\(.*\)";[[:space:]]*$/\1/p'  | head -1)"
+  [ -n "$rise" ] && [ -n "$set" ] || return 1
+  rise="$(date -j -f '%Y-%m-%d %H:%M:%S %z' "$rise" +%s 2>/dev/null)"
+  set="$( date -j -f '%Y-%m-%d %H:%M:%S %z' "$set"  +%s 2>/dev/null)"
+  [ -n "$rise" ] && [ -n "$set" ] || return 1
+
+  mkdir -p "$STATE_DIR"
+  printf '%s %s %s\n' "$today" "$rise" "$set" > "$SUN"
+  printf '%s %s' "$rise" "$set"
+}
+
+# Exit status says where the answer came from: 0 the sun, 1 the clock.
+daylight() {
+  local times rise set now
+  if times="$(sun_times)"; then
+    rise="${times%% *}"; set="${times##* }"; now="$(date +%s)"
+    if [ "$now" -ge "$rise" ] && [ "$now" -lt "$set" ]; then echo light; else echo dark; fi
+    return 0
+  fi
+  # No location set for Night Shift. Fixed hours are a worse answer than the
+  # sun, but a much better one than refusing to work.
+  local h; h="$(date +%-H)"
+  if [ "$h" -ge 7 ] && [ "$h" -lt 19 ]; then echo light; else echo dark; fi
+  return 1
+}
+
+if [ "${1:-}" = "--describe" ]; then
+  on=0; enabled && on=1
+  want="$(daylight)"
+  jq -n --arg light "$LIGHT" --arg dark "$DARK" --arg want "$want" --argjson on "$on" '{
+    id: "theme.auto",
+    summary: "Follow the sun: light theme by day, dark after sunset",
+    args: [{name:"on|off", required:false},
+           {name:"--light", required:false, default:$light},
+           {name:"--dark", required:false, default:$dark},
+           {name:"--apply", required:false, note:"what the launchd agent runs"}],
+    destructive: false,
+    guard: "only ever switches between the two themes you named",
+    verify: "dot theme auto",
+    instances: (if $on == 1 then
+        [{label: "Stop following the sun",
+          detail: ($light + " / " + $dark), args: ["off"]}]
+      else
+        [{label: "Follow the sun: light by day, dark at night",
+          detail: ($light + " / " + $dark + ", " + $want + " now"), args: ["on"]}]
+      end)
+  }'
+  exit 0
+fi
+
+ACTION=""; APPLY=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    on|off) ACTION="$1"; shift ;;
+    --light) LIGHT="${2:-}"; ACTION="${ACTION:-set}"; shift 2 ;;
+    --dark)  DARK="${2:-}";  ACTION="${ACTION:-set}"; shift 2 ;;
+    --apply) APPLY=1; shift ;;
+    *) echo "theme auto: unknown argument $1" >&2; exit 1 ;;
+  esac
+done
+
+for t in "$LIGHT" "$DARK"; do
+  [ -d "$THEMES/$t" ] || { echo "theme auto: no theme '$t'" >&2; exit 1; }
+done
+
+if [ "$APPLY" -eq 1 ]; then
+  enabled || exit 0
+  want="$(daylight)"
+  target="$LIGHT"; [ "$want" = "dark" ] && target="$DARK"
+  # Doing nothing is the common case, ten minutes out of ten: a repaint you
+  # did not ask for, while you are looking at the screen, is worse than late.
+  [ "$(cat "$STATE_DIR/theme" 2>/dev/null)" = "$target" ] && exit 0
+  audit "theme auto -> $target ($want)"
+  exec "$DOT_ROOT/bin/dot" theme set "$target"
+fi
+
+if [ -n "$ACTION" ]; then
+  mkdir -p "$STATE_DIR"
+  printf 'light=%s\ndark=%s\n' "$LIGHT" "$DARK" > "$PREFS"
+fi
+
+case "$ACTION" in
+  on)
+    mkdir -p "$HOME/Library/LaunchAgents"
+    sed "s|__HOME__|$HOME|g" "$DOT_ROOT/launchd/$AGENT.plist" > "$PLIST"
+    launchctl bootout "gui/$(id -u)/$AGENT" 2>/dev/null || true
+    launchctl bootstrap "gui/$(id -u)" "$PLIST" 2>/dev/null \
+      || { echo "theme auto: could not load the agent" >&2; exit 1; }
+    audit "theme auto on ($LIGHT / $DARK)"
+    ;;
+  off)
+    launchctl bootout "gui/$(id -u)/$AGENT" 2>/dev/null || true
+    rm -f "$PLIST"
+    audit "theme auto off"
+    ;;
+esac
+
+# Status, which is also what `dot theme auto` on its own prints.
+if enabled; then
+  want="$(daylight)"; src="the sun here"; daylight >/dev/null || src="the clock"
+  printf 'theme auto: on -- %s by day, %s at night (%s now, by %s)\n' \
+         "$LIGHT" "$DARK" "$want" "$src"
+  [ "$ACTION" = "on" ] && "$DOT_ROOT/libexec/dot/theme-auto" --apply
+else
+  printf 'theme auto: off -- would use %s by day, %s at night\n' "$LIGHT" "$DARK"
+fi

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>sh.dotfiles.theme-auto</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__HOME__/.local/bin/dot</string>
+        <string>theme</string>
+        <string>auto</string>
+        <string>--apply</string>
+    </array>
+
+    <!-- Sunrise and sunset move by a minute or two a day, so there is no fixed
+         time to fire at. Polling is the honest option: --apply is one read of
+         the cached sun times and exits without doing anything if the theme is
+         already right, so the cost of checking is close to nothing. Ten
+         minutes is well inside the few minutes of dusk you would notice. -->
+    <key>StartInterval</key>
+    <integer>600</integer>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StandardErrorPath</key>
+    <string>__HOME__/.local/state/aerospace/theme-auto.err</string>
+</dict>
+</plist>

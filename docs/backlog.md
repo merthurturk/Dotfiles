@@ -5,7 +5,7 @@ by how interesting they are to build.
 
 Each says roughly what it costs and — where it matters — what makes it safe.
 Items are removed from this list when they ship, not ticked off: `dot scene
-save`, `dot window send` and `dot window pin` were all here.
+save`, `dot window send`, `dot window pin` and `dot theme auto` were all here.
 
 ---
 
@@ -13,14 +13,6 @@ save`, `dot window send` and `dot window pin` were all here.
 
 The bar is: *does this remove a decision, a keystroke, or a trip into a config
 file?*
-
-### Theme follows the time of day
-
-Light while it's light, dark after sunset. The themes already declare
-`appearance` and `dot theme set` already switches macOS with it; this is a
-schedule and a preference for which light and which dark theme.
-
-*Small. A launchd agent, or the existing bridge on a timer.*
 
 ### Restore the scenes you had
 
