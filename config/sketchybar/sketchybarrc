@@ -196,6 +196,24 @@ sketchybar --add bracket status volume battery clock \
                  background.corner_radius=$PILL_RADIUS \
                  background.height="$PILL_HEIGHT"
 
+##### What's next #####
+#
+# Left of the now-playing chip, so the two "ambient" chips sit together and the
+# status group stays furthest right. Polls once a minute: an event that starts
+# in 40 minutes does not need checking every five seconds, and the helper is a
+# local database read either way.
+
+sketchybar --add item calendar right \
+           --set calendar update_freq=60 \
+                 drawing=off \
+                 icon.padding_left=10 \
+                 label.padding_right=12 \
+                 background.color="$GROUP_BG" \
+                 background.border_color="$GROUP_BORDER" \
+                 script="$PLUGIN_DIR/calendar.sh" \
+                 click_script="$HOME/.local/bin/dot calendar agenda --pick" \
+           --subscribe calendar system_woke mouse.entered mouse.exited
+
 ##### Now playing #####
 
 sketchybar --add item music right \

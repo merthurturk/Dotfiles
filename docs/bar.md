@@ -72,6 +72,46 @@ it looks fine and renders no Berkeley at all. Weight comes from the family name:
 Berkeley Mono is commercial and can't ship here, so `fonts.sh` probes for it and
 falls back to Hack.
 
+## The calendar chip
+
+Shows what is next, and only when it is close — an empty afternoon should be an
+empty bar, not the word "nothing". Clicking it opens today in the picker.
+
+The events come from **EventKit**, the local store macOS Calendar syncs into.
+That is the whole reason for the route: a Google account added under *System
+Settings > Internet Accounts* appears there with no OAuth flow, no client
+secret in this repo, and no refresh token to keep alive. The alternative —
+talking to the Google Calendar API — would mean every person who forked this
+creating their own Google Cloud project.
+
+**Not AppleScript.** `tell application "Calendar" to get every event whose start
+date ≥ …` takes **five seconds** on this machine; EventKit answers in 40ms off a
+local database. The music chip can afford a 130ms AppleScript round trip once
+every five seconds, and this could not.
+
+### Why the helper is a .app
+
+`config/aerospace/bin/DotCalendar.app` is a bundle rather than a bare binary
+like the picker and the geometry helper, for one reason: reading Calendars
+needs a TCC grant, and **the Calendars pane in System Settings has no "+"
+button**. An app only appears in that list once it has asked. A bundle gives it
+an identity of its own — listed as *dot calendar*, which is recognisable — instead
+of inheriting whatever process happened to launch it, which would mean granting
+SketchyBar access to your calendar and getting a different answer from the
+command line.
+
+Two things learned building it, both of which cost time:
+
+`authorizationStatus` and `requestFullAccessToEvents` disagree. A process can
+read a status of `fullAccess` and still get `false` back from a request, and
+then refuse to do work it was entitled to do. Check the status first and only
+ask when it is `notDetermined`.
+
+`EKAuthorizationStatus` is easy to misread: **3 is `fullAccess`, 4 is
+`writeOnly`**. An "Add Events Only" grant looks like success to anyone who
+assumes the last constant is the best one, and then every read comes back
+empty.
+
 ## y_offset belongs with the font
 
 `sketchybarrc` sets each workspace pill up once, including `label.y_offset=-1`,

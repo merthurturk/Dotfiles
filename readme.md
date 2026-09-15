@@ -245,6 +245,21 @@ back rather than keeping a second copy. Before installing a rewrite it checks
 that everything outside the block is byte-identical, then that AeroSpace can
 still parse the result, and rolls back if not.
 
+## What's next
+
+A calendar chip, left of the now-playing one, showing the next event when it is
+close — and today in the picker when you click it.
+
+```sh
+dot calendar agenda           # today, as text
+dot calendar agenda --json
+```
+
+Events come from EventKit, so **add Google under *System Settings > Internet
+Accounts*** and they appear with no OAuth and no secret in this repo. The helper
+needs Calendars access once: *Privacy & Security > Calendars*, set **dot
+calendar** to Full Access. `dot doctor` says so if it is missing.
+
 ## The picker
 
 `config/aerospace/src/picker.swift` compiles to a standalone chooser —

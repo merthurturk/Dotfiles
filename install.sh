@@ -66,6 +66,19 @@ if command -v swiftc >/dev/null 2>&1; then
     swiftc -O -o "$DOTFILES/config/aerospace/bin/$helper" \
                 "$DOTFILES/config/aerospace/src/$helper.swift" -framework AppKit
   done
+
+  # The calendar helper is a .app rather than a bare binary, because reading
+  # Calendars needs a TCC grant and the Calendars pane in System Settings has
+  # no "+" button: an app only appears there once it has asked. A bundle gives
+  # it a name you can recognise in that list, and an identity of its own rather
+  # than inheriting whatever happened to launch it.
+  log "Building the calendar helper"
+  APP="$DOTFILES/config/aerospace/bin/DotCalendar.app"
+  mkdir -p "$APP/Contents/MacOS"
+  cp "$DOTFILES/config/aerospace/src/DotCalendar-Info.plist" "$APP/Contents/Info.plist"
+  swiftc -O -o "$APP/Contents/MacOS/DotCalendar" \
+              "$DOTFILES/config/aerospace/src/calendar.swift" -framework EventKit
+  codesign --force --sign - "$APP" >/dev/null 2>&1 || true
 else
   warn "swiftc missing - run 'xcode-select --install' then re-run this script."
   warn "Until then the Chrome profile prompt falls back to a plain AppleScript list,"

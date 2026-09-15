@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+#
+# dot calendar agenda [--pick] [--json]
+#
+# Today, in the launcher -- the whole day, not just what is left, because the
+# thing you most often want is "what have I already agreed to". Choosing an
+# event opens Calendar.
+#
+# The bar shows only what is next and only when it is close; this is the whole
+# day, which is a different question and wants a different surface. It is the
+# picker rather than a window because the picker is already the thing this
+# setup shows lists in.
+
+set -u
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+
+CAL="$DOT_ROOT/config/aerospace/bin/DotCalendar.app/Contents/MacOS/DotCalendar"
+NEXT_FILE="$STATE_DIR/next-event"
+
+if [ "${1:-}" = "--describe" ]; then
+  # The detail comes from what the bar already published, so opening the
+  # palette costs nothing -- the helper is not run here.
+  next=""
+  [ -r "$NEXT_FILE" ] && IFS=$'\t' read -r _ when title < "$NEXT_FILE" \
+    && [ -n "${title:-}" ] && next="$when · $title"
+  jq -n --arg next "${next:-}" --argjson have "$([ -x "$CAL" ] && echo true || echo false)" '{
+    id: "calendar.agenda",
+    summary: "Show what is on today",
+    args: [{name: "--pick", required: false, note: "show it in the launcher"},
+           {name: "--json", required: false}],
+    destructive: false,
+    instances: (if $have and $next != ""
+                then [{label: "Today", detail: $next, args: ["--pick"]}]
+                else [] end)
+  }'
+  exit 0
+fi
+
+PICK=0; AS_JSON=0
+for a in "$@"; do
+  case "$a" in
+    --pick) PICK=1 ;;
+    --json) AS_JSON=1 ;;
+    *) echo "usage: dot calendar agenda [--pick] [--json]" >&2; exit 1 ;;
+  esac
+done
+
+[ -x "$CAL" ] || { echo "dot: calendar helper not built - run install.sh" >&2; exit 1; }
+
+ROWS="$("$CAL" agenda 2>/dev/null)" || true
+if [ -z "$ROWS" ]; then
+  # Distinguish "nothing on" from "cannot see your calendar", because the fix
+  # for one of those is a permission and the fix for the other is a holiday.
+  if ! "$CAL" agenda >/dev/null 2>&1; then
+    echo "calendar: no access to Calendars - grant Full Access (dot doctor says where)" >&2
+    exit 1
+  fi
+  echo "nothing left today"
+  exit 0
+fi
+
+if [ "$AS_JSON" -eq 1 ]; then
+  printf '%s\n' "$ROWS" | jq -R -s 'split("\n") | map(select(length>0) | split("\t"))
+    | map({start: (.[0]|tonumber), end: (.[1]|tonumber), all_day: (.[2] == "1"),
+           calendar: .[3], title: .[4]})'
+  exit 0
+fi
+
+NOW="$(date +%s)"
+rows="$(printf '%s\n' "$ROWS" | while IFS=$'\t' read -r start end allday cal title; do
+  if [ "$allday" = "1" ]; then
+    when="all day"
+  else
+    when="$(date -r "$start" '+%H:%M')–$(date -r "$end" '+%H:%M')"
+  fi
+  # A mark for what is running now, so the current row is findable at a glance.
+  # Not for all-day events: they are "now" from midnight to midnight, which
+  # marks them every time and tells you nothing.
+  mark="  "
+  [ "$allday" = "0" ] && [ "$NOW" -ge "$start" ] && [ "$NOW" -lt "$end" ] && mark="▸ "
+  printf '%s%-13s  %s\t%s\n' "$mark" "$when" "$title" "$cal"
+done)"
+
+# --pick, not "stdout is not a tty". Inferring a GUI from the absence of a
+# terminal opens a panel for every scripted run and then blocks on an answer
+# nobody is there to give -- which is exactly what it did the first time this
+# was tested. The bar's click_script and the launcher pass the flag; everything
+# else gets text.
+if [ "$PICK" -eq 1 ] && [ -x "$PICKER" ]; then
+  choice="$(printf '%s\n' "$rows" | pick "Today" calendar-agenda)"
+  [ -n "$choice" ] || exit 0
+  # Calendar has no "open this event" URL scheme, but it does take a date, and
+  # landing on the right day with the event visible is the useful part.
+  title="${choice#*  }"; title="${title#"${title%%[![:space:]]*}"}"
+  audit "calendar agenda -> $title"
+  open -a Calendar
+else
+  printf '%s\n' "$rows" | awk -F'\t' '{ printf "%s\n", $1 }'
+fi
