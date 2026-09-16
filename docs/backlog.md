@@ -36,14 +36,42 @@ estimate from the same plausible reasoning.
 
 ---
 
+## The last thing registered twice
+
+### Let a capability declare its own keybinding
+
+A descriptor says everything about a capability except the one thing you press.
+`instances` puts it in the palette for free, but a *dedicated* chord still means
+hand-editing `aerospace.toml`, which is the only place left where adding
+something means touching a second file — the exact drift this repo removed
+everywhere else.
+
+The shape: an optional `key` in the descriptor, and a generator that owns a
+marked block in `aerospace.toml` the way `dot window pin` already owns one.
+`dot keys` keeps reading the file, so it stays the single source of truth; the
+descriptor just becomes one more thing that can write to it.
+
+The guard is the one `dot window pin` already proved: everything outside the
+block must be byte-identical, AeroSpace must still parse the result, roll back
+if not. Note that most capabilities should still declare no key at all — the
+leader exists precisely so they don't need one.
+
+*Small-to-medium, and it closes the last seam.*
+
+---
+
 ## Getting it into other people's hands
 
-### Screenshots and a short recording
+### A short recording
 
-Still the largest adoption gap. Everything here is documented carefully and
-shown not at all, for a project whose entire point is how it looks.
+The readme has stills now — the bar, the palette, the agenda. What they cannot
+show is the part that actually sells this: `⌥space`, three keystrokes, a desk
+rearranging itself in under a second. Latency is a feature and a screenshot has
+no latency.
 
-*Small, but only you can take them.*
+*Small. The agenda shot was taken against a synthetic `agenda.tsv` so the repo
+publishes example events rather than a real calendar; a recording needs the same
+care.*
 
 ### `dot theme new <name>`
 
