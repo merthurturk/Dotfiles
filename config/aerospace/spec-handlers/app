@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+#
+# app:<App Name>  -- summon the app's window, launching it if it isn't running.
+#
+# A spec handler is given the part after the colon and prints one window id.
+# Everything from split-lib.sh is already sourced: snapshot_windows,
+# wait_for_new_window, find_app_window.
+
+set -u
+
+# Native apps get summoned, not duplicated -- most only have one window, and a
+# second copy of Telegram isn't a thing anyone wants.
+existing="$(find_app_window "$1")"
+[ -n "$existing" ] && { printf '%s' "$existing"; exit 0; }
+
+before="$(snapshot_windows)"
+open -a "$1"
+wait_for_new_window "$before"

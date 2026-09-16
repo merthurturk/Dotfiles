@@ -27,7 +27,11 @@ source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 # permission, and asking it again from a shell would be asking with the
 # shell's grant instead, which is a different and usually absent one.
 AGENDA_FILE="$STATE_DIR/agenda.tsv"
+# Yours first, then the shipped example. The docs told you to edit a tracked
+# file, which meant a permanently dirty tree and a conflict on every pull.
 CLOCKS="$DOT_ROOT/config/aerospace/world-clocks.tsv"
+CLOCKS_LOCAL="${XDG_CONFIG_HOME:-$HOME/.config}/dot/world-clocks.tsv"
+[ -r "$CLOCKS_LOCAL" ] && CLOCKS="$CLOCKS_LOCAL"
 NEXT_FILE="$STATE_DIR/next-event.tsv"
 
 if [ "${1:-}" = "--describe" ]; then

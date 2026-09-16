@@ -29,17 +29,47 @@ export DOT_ROOT
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 LIBEXEC="$DOT_ROOT/libexec/dot"
 
+# Where capabilities live. Earlier entries win, so dropping your own
+# `window-split` into ~/.config/dot/libexec overrides the shipped one without
+# touching this repo -- and a capability of your own survives `git pull` and
+# `git clean` instead of sitting in the tree for ever.
+#
+# A package is just a directory on this path. Nothing else is needed: the
+# descriptor already carries everything the launcher, `dot help` and the
+# validator read.
+DOT_PATH="${DOT_PATH:-${XDG_CONFIG_HOME:-$HOME/.config}/dot/libexec:$LIBEXEC}"
+export DOT_PATH
+
+# So a capability outside this repo can still `source "${DOT_LIB:?}"`. The
+# documented preamble used to be relative to the capability, which meant the
+# library that makes capabilities cheap to write was reachable only from inside
+# the one directory.
+DOT_LIB="$LIBEXEC/_lib.sh"
+export DOT_LIB
+
 die() { printf 'dot: %s\n' "$*" >&2; exit 1; }
 
-# _lib.sh is shared code, not a command.
-list_commands() {
-  local f b
-  for f in "$LIBEXEC"/*; do
-    [ -e "$f" ] || continue
-    b="${f##*/}"
-    case "$b" in _*) continue ;; esac
-    printf '%s\n' "$b"
-  done | sort
+# "<name>\t<path>" for every capability on DOT_PATH, first match winning.
+# Files starting with _ are shared code, not commands.
+list_paths() {
+  local dir f b
+  local IFS=:
+  for dir in $DOT_PATH; do
+    [ -d "$dir" ] || continue
+    for f in "$dir"/*; do
+      [ -f "$f" ] && [ -x "$f" ] || continue
+      b="${f##*/}"
+      case "$b" in _*) continue ;; esac
+      printf '%s\t%s\n' "$b" "$f"
+    done
+  done | sort -t"$(printf '\t')" -k1,1 -u
+}
+
+list_commands() { list_paths | cut -f1; }
+
+# The file that would run for a given name, honouring the path order.
+resolve() {   # <name>
+  list_paths | awk -F'\t' -v n="$1" '$1 == n { print $2; exit }'
 }
 
 usage() {
@@ -85,11 +115,25 @@ capabilities() {
   local tmp c
   tmp="$(mktemp -d)"
 
-  while IFS= read -r c; do
+  # One watchdog for the batch, not one per descriptor. Without any, a single
+  # slow --describe hangs ⌥space for ever with no window and no error --
+  # survivable while every capability is ours, unacceptable once DOT_PATH can
+  # load someone else's. Per-descriptor watchdogs cost two extra processes each
+  # and measured 40ms on the open; this costs two in total.
+  local pids=""
+  while IFS=$'\t' read -r c path; do
     [ -n "$c" ] || continue
-    { bash "$LIBEXEC/$c" --describe > "$tmp/$c" 2>/dev/null; } &
-  done < <(list_commands)
-  wait
+    bash "$path" --describe > "$tmp/$c" 2>/dev/null &
+    pids="$pids $!"
+  done < <(list_paths)
+
+  # shellcheck disable=SC2086  # the list is pids we just collected
+  { sleep 3; kill -9 $pids 2>/dev/null; } &
+  local watchdog=$!
+  # shellcheck disable=SC2086
+  wait $pids 2>/dev/null
+  kill "$watchdog" 2>/dev/null
+  wait "$watchdog" 2>/dev/null
 
   # Filenames sort the same way list_commands does, so order is unchanged.
   # `// empty` drops anything that failed to produce valid JSON rather than
@@ -106,6 +150,7 @@ case "${1:-}" in
   ""|help|-h|--help) usage; exit 0 ;;
   capabilities)
     shift
+    if [ "${1:-}" = "--paths" ]; then list_paths; exit 0; fi
     if [ "${1:-}" = "--json" ] || [ $# -eq 0 ]; then
       capabilities
     else
@@ -115,11 +160,12 @@ case "${1:-}" in
     ;;
 esac
 
-# Try "<group>-<verb>" first, then a bare "<command>".
-if [ $# -ge 2 ] && [ -x "$LIBEXEC/$1-$2" ]; then
-  cmd="$LIBEXEC/$1-$2"; shift 2
-elif [ -x "$LIBEXEC/$1" ]; then
-  cmd="$LIBEXEC/$1"; shift
+# Try "<group>-<verb>" first, then a bare "<command>" -- both through the path,
+# so an override earlier in DOT_PATH wins.
+if [ $# -ge 2 ] && cmd="$(resolve "$1-$2")" && [ -n "$cmd" ]; then
+  shift 2
+elif cmd="$(resolve "${1:-}")" && [ -n "$cmd" ]; then
+  shift
 else
   printf 'dot: unknown command: %s\n\n' "$*" >&2
   usage >&2

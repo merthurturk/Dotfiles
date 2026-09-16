@@ -45,6 +45,24 @@ Required: `id`, `summary`, `destructive`. Plus `guard` whenever destructive
 `instances` to appear in the palette. Details in
 [capabilities](docs/capabilities.md).
 
+### Everything is a search path
+
+Five things can live outside this repo, and each defaults to
+`~/.config/dot/...` ahead of the shipped copy. Earlier entries win, so adding
+*or overriding* one never means editing a tracked file:
+
+| | |
+|---|---|
+| `DOT_PATH` | capabilities — `libexec/` |
+| `DOT_THEME_PATH` | themes |
+| `SKETCHY_ITEM_PATH` | bar items |
+| `SPEC_PATH` | scene window-spec handlers |
+| `~/.config/dot/*.tsv` | world clocks, scene icons |
+
+When you add something new that a user might reasonably want to replace, give
+it a path rather than a constant. And write `source "${DOT_LIB:?}"` in a
+capability — a path relative to the file only works inside this repo.
+
 ### Ask the owner, don't copy it
 
 Four files exist to be `source`d, not executed, so asking costs nothing:

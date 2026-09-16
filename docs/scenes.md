@@ -30,6 +30,18 @@ Definitions live in `config/aerospace/scenes.json` — **data, not code**:
 
 ## Window specs
 
+The prefix before the colon names a **handler** — an executable on `SPEC_PATH`
+(`~/.config/dot/spec-handlers`, then `config/aerospace/spec-handlers`). It is
+given the part after the colon, has `split-lib.sh` sourced, and prints one
+window id.
+
+So the vocabulary is open. A Safari or Arc user writes
+`~/.config/dot/spec-handlers/safari` and uses `safari:` in a scene; this used to
+be a `case` statement in `scene.sh`, which is a closed list of verbs sitting
+directly underneath an open data file.
+
+
+
 | Spec | Opens |
 |---|---|
 | `app:<App Name>` | summons that app's window, launching it only if none exists |

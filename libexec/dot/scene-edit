@@ -16,6 +16,8 @@ source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
 SHIPPED="$DOT_ROOT/config/aerospace/scenes.json"
 ICONS="$DOT_ROOT/config/aerospace/scene-icons.tsv"
+# Add your own glyphs without editing a tracked file; yours are offered first.
+ICONS_LOCAL="${XDG_CONFIG_HOME:-$HOME/.config}/dot/scene-icons.tsv"
 BADGES="PEACH TEAL MAUVE BLUE GREEN"
 
 if [ "${1:-}" = "--describe" ]; then
@@ -90,7 +92,7 @@ if [ -z "$RENAME$LABEL$ICON$BADGE$RATIO$QUIT" ]; then
            | pick "Change what about $NAME?" scene-edit-field | cut -f1)"
   case "$field" in
     Icon)
-      g="$(grep -v '^#' "$ICONS" | awk -F'\t' 'NF==2 { print $1 "  " $2 "\t" }' \
+      g="$(cat "$ICONS_LOCAL" "$ICONS" 2>/dev/null | grep -v '^#' | awk -F'\t' 'NF==2 { print $1 "  " $2 "\t" }' \
            | pick "Pick an icon for $NAME" scene-icon | awk '{print $1}')"
       [ -n "$g" ] || exit 0
       ICON="$g" ;;

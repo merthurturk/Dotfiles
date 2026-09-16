@@ -5,18 +5,20 @@
 
 set -u
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
-THEMES="$DOT_ROOT/themes"
 
 if [ "${1:-}" = "--describe" ]; then
   current="$(cat "$STATE_DIR/theme" 2>/dev/null)"
+  # One meta.json per theme, resolved through DOT_THEME_PATH so a theme of your
+  # own outside the repo is offered alongside the shipped ones.
+  METAS="$(theme_names | while read -r t; do printf '%s/meta.json ' "$(theme_dir "$t")"; done)"
   jq -n \
-    --argjson choices "$(ls "$THEMES" | jq -R -s 'split("\n")|map(select(length>0))')" \
+    --argjson choices "$(theme_names | jq -R -s 'split("\n")|map(select(length>0))')" \
     --argjson instances "$(
       jq -n --arg cur "$current" '
         [ inputs | {n: (input_filename | split("/")[-2]), label: .name, app: .appearance} ]
         | map(select(.n != $cur))
         | map({label: ("Theme: " + .label), detail: .app, args: [.n]})' \
-        "$THEMES"/*/meta.json)" '{
+        $METAS)" '{
       id: "theme.set",
       summary: "Switch the bar and terminal theme together",
       args: [{name:"theme", required:true, choices:$choices}],
@@ -29,8 +31,8 @@ fi
 
 THEME="${1:-}"
 [ -n "$THEME" ] || { echo "usage: dot theme set <name>" >&2; "$DOT_ROOT/bin/dot" theme list >&2; exit 1; }
-DIR="$THEMES/$THEME"
-[ -d "$DIR" ] || { echo "dot: no theme '$THEME'" >&2; "$DOT_ROOT/bin/dot" theme list >&2; exit 1; }
+DIR="$(theme_dir "$THEME")"
+[ -n "$DIR" ] && [ -d "$DIR" ] || { echo "dot: no theme '$THEME'" >&2; "$DOT_ROOT/bin/dot" theme list >&2; exit 1; }
 
 ln -sfn "$DIR/colors.sh"   "$DOT_ROOT/config/sketchybar/colors.sh"
 ln -sfn "$DIR/ghostty.conf" "$DOT_ROOT/config/ghostty/theme.conf"

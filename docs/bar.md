@@ -3,6 +3,31 @@
 SketchyBar, configured by `config/sketchybar/sketchybarrc`. Plugins live in
 `config/sketchybar/plugins/`.
 
+## Adding an item
+
+Every item is a file, sourced from every directory on `SKETCHY_ITEM_PATH`:
+
+```
+~/.config/dot/sketchybar/items : <repo>/config/sketchybar/items
+```
+
+Files are sourced in **filename order across all directories**, so a `55-` of
+yours runs between the shipped `50-` and `60-`; directory order decides which
+file wins when two share a name. `sketchybarrc` keeps the bar, the defaults and
+the geometry — what is *in* the bar is a directory.
+
+Everything is already in scope: `$PLUGIN_DIR`, the geometry, every colour from
+`colors.sh`, every font from `fonts.sh`. To join an existing pill rather than
+float alone, append your item to the bracket variable:
+
+```sh
+sketchybar --add item hello right --set hello label="mine"
+BRACKET_status="$BRACKET_status hello"
+```
+
+Brackets are collected as items declare themselves and materialised once at the
+end, which is what lets an item in one file join a pill declared in another.
+
 ## Items, left to right
 
 Deliberately not listed here. `config/sketchybar/sketchybarrc` is the list, and

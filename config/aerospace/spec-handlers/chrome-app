@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+#
+# chrome-app:<url>  -- a Chrome --app window: no tab strip, no toolbar, which
+# is what a narrow side panel wants.
+
+set -u
+before="$(snapshot_windows)"
+open -na "Google Chrome" --args --profile-directory="${SCENE_PROFILE_DIR:-Default}" \
+     --app="$1"
+wait_for_new_window "$before"

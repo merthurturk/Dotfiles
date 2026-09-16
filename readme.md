@@ -284,6 +284,36 @@ sheet is wrong the first time you rebind something. What each key *does* comes
 from the same place the launcher gets it: a `dot` binding is described by its
 own capability descriptor, so `⌥⇧space` says "Open scene: chill" in both.
 
+## Extending it without forking it
+
+Five search paths, each preferring `~/.config/dot/` over the shipped copy:
+
+```
+~/.config/dot/libexec/<group>-<verb>     a capability -- appears in dot help,
+                                         the palette, and `dot <group> <verb>`
+~/.config/dot/themes/<name>/             a theme
+~/.config/dot/sketchybar/items/55-x.sh   a bar widget
+~/.config/dot/spec-handlers/<kind>       a scene window-spec verb
+~/.config/dot/world-clocks.tsv           your cities
+```
+
+Earlier wins, so the same mechanism **overrides** a shipped one: drop your own
+`window-split` in and it shadows this repo's without touching a tracked file.
+Nothing needs registering — a capability is discovered by its `--describe`, a
+widget by its filename.
+
+```sh
+cat > ~/.config/dot/libexec/hello-world <<'EOF'
+#!/usr/bin/env bash
+source "${DOT_LIB:?}"
+[ "$1" = --describe ] && { jq -n '{id:"hello.world",summary:"Mine",args:[],
+  destructive:false,instances:[{label:"Say hello",detail:"",args:[]}]}'; exit; }
+echo hello
+EOF
+chmod +x ~/.config/dot/libexec/hello-world
+dot hello world        # and it is in ⌥space
+```
+
 ## The picker
 
 `config/aerospace/src/picker.swift` compiles to a standalone chooser —

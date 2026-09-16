@@ -17,6 +17,7 @@ set -u
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
 WALLPAPER="$DOT_ROOT/config/aerospace/bin/wallpaper"
+# The shipped themes; DOT_THEME_PATH in _lib.sh is the full search order.
 THEMES="$DOT_ROOT/themes"
 CACHE="$STATE_DIR/wallpaper"
 LEDGER="$CACHE/Index.plist.before-dot"
@@ -25,7 +26,7 @@ current_theme() { cat "$STATE_DIR/theme" 2>/dev/null; }
 
 if [ "${1:-}" = "--describe" ]; then
   jq -n \
-    --argjson choices "$(ls "$THEMES" | jq -R -s 'split("\n")|map(select(length>0))')" \
+    --argjson choices "$(theme_names | jq -R -s 'split("\n")|map(select(length>0))')" \
     --arg detail "$(current_theme)" '{
       id: "theme.wallpaper",
       summary: "Match the desktop picture and screen saver to the theme",
@@ -81,7 +82,7 @@ done
 
 [ -n "$THEME" ] || THEME="$(current_theme)"
 [ -n "$THEME" ] || { echo "dot: no theme set -- run 'dot theme set <name>' first" >&2; exit 1; }
-COLORS="$THEMES/$THEME/colors.sh"
+COLORS="$(theme_dir "$THEME")/colors.sh"
 [ -f "$COLORS" ] || { echo "dot: no theme '$THEME'" >&2; exit 1; }
 
 # --- palette --------------------------------------------------------------

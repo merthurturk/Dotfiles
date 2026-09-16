@@ -32,6 +32,28 @@ STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/aerospace"
 # that merge gets written. Ask the owner: scenes_json() below.
 SKETCHY="$HOME/.config/sketchybar"
 SCENE_SH="$DOT_ROOT/config/aerospace/scene.sh"
+
+# Themes, like capabilities, can live outside the repo. Four files said
+# THEMES="$DOT_ROOT/themes" and a theme of your own therefore had to be
+# committed to a repo you do not own.
+DOT_THEME_PATH="${DOT_THEME_PATH:-${XDG_CONFIG_HOME:-$HOME/.config}/dot/themes:$DOT_ROOT/themes}"
+
+# theme_dir <name> -> the directory that wins, or nothing
+theme_dir() {
+  local d IFS=:
+  for d in $DOT_THEME_PATH; do
+    [ -d "$d/$1" ] && { printf '%s' "$d/$1"; return 0; }
+  done
+  return 1
+}
+
+# every theme name available, first path entry winning
+theme_names() {
+  local d IFS=:
+  for d in $DOT_THEME_PATH; do
+    [ -d "$d" ] && ls -1 "$d" 2>/dev/null
+  done | awk '!seen[$0]++'
+}
 SCENES_LOCAL="$DOT_ROOT/config/aerospace/scenes.local.json"
 PICKER="$DOT_ROOT/config/aerospace/bin/picker"
 

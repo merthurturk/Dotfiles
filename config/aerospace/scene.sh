@@ -389,43 +389,40 @@ fi
 
 
 # Opens one window spec and prints the resulting window id.
+# Where window-spec handlers live. `app:`, `chrome:` and `chrome-app:` used to
+# be a case statement in this file -- a closed vocabulary directly underneath an
+# open data file, so a Safari or Arc user could not express their setup at all.
+#
+# A handler is an executable named for the prefix. It is given the part after
+# the colon, has split-lib.sh already sourced, and prints one window id. Yours
+# go in ~/.config/dot/spec-handlers and win by name.
+SPEC_PATH="${SPEC_PATH:-${XDG_CONFIG_HOME:-$HOME/.config}/dot/spec-handlers:$DIR/spec-handlers}"
+
 open_spec() {
-  local spec="$1" kind rest before
+  local spec="$1" kind rest d handler=""
   kind="${spec%%:*}"
   rest="${spec#*:}"
 
-  case "$kind" in
-    app)
-      # Native apps get summoned, not duplicated -- most only have one window,
-      # and a second copy of Telegram isn't a thing anyone wants.
-      local existing
-      existing="$(find_app_window "$rest")"
-      if [ -n "$existing" ]; then
-        printf '%s' "$existing"
-        return 0
-      fi
-      before="$(snapshot_windows)"
-      open -a "$rest"
-      wait_for_new_window "$before"
-      ;;
-    chrome)
-      before="$(snapshot_windows)"
-      # $rest is deliberately unquoted: several URLs become several tabs.
-      open -na "Google Chrome" --args --profile-directory="$PROFILE_DIR" \
-           --new-window $rest
-      wait_for_new_window "$before"
-      ;;
-    chrome-app)
-      before="$(snapshot_windows)"
-      open -na "Google Chrome" --args --profile-directory="$PROFILE_DIR" \
-           --app="$rest"
-      wait_for_new_window "$before"
-      ;;
-    *)
-      echo "scene: unknown window spec '$spec'" >&2
-      return 1
-      ;;
-  esac
+  local IFS=:
+  for d in $SPEC_PATH; do
+    [ -x "$d/$kind" ] && { handler="$d/$kind"; break; }
+  done
+  unset IFS
+
+  if [ -z "$handler" ]; then
+    echo "scene: no handler for '$kind:' -- add one to ~/.config/dot/spec-handlers/$kind" >&2
+    return 1
+  fi
+
+  # Sourced, not executed: the handler needs snapshot_windows and friends, and
+  # execing one would pay a bash start per window of every scene.
+  (
+    set -- "$rest"
+    # shellcheck disable=SC2034  # the handler reads it
+    SCENE_PROFILE_DIR="$PROFILE_DIR"
+    # shellcheck source=/dev/null
+    . "$handler"
+  )
 }
 
 $AEROSPACE workspace "$WS"

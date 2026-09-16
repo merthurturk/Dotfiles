@@ -99,7 +99,7 @@ Create `libexec/dot/<group>-<verb>`:
 ```bash
 #!/usr/bin/env bash
 set -u
-source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+source "${DOT_LIB:?}"
 
 if [ "${1:-}" = "--describe" ]; then
   jq -n '{id:"group.verb", summary:"…", args:[], destructive:false,
@@ -113,6 +113,32 @@ exec …
 
 Then `bin/check-capabilities.sh`. Nothing else to update — not the palette, not
 `dot help`, not the docs index.
+
+## Where capabilities can live
+
+`DOT_PATH` is a search path, defaulting to:
+
+```
+~/.config/dot/libexec : <repo>/libexec/dot
+```
+
+Earlier entries win, so **a capability of your own never needs to go in this
+repo** — and dropping your own `window-split` into `~/.config/dot/libexec`
+overrides the shipped one without touching a tracked file. `dot help`, the
+palette, the dispatcher and `check-capabilities.sh` all resolve through the
+same path, so an override is what gets listed, run *and* validated.
+
+A package is a directory on that path. Nothing else is needed: the descriptor
+already carries everything anything downstream reads.
+
+Two consequences worth knowing:
+
+- Write `source "${DOT_LIB:?}"`, not a path relative to your file. `dot`
+  exports `DOT_LIB`, which is what lets an out-of-tree capability reach the
+  library at all.
+- Each `--describe` is under a **3-second watchdog**. Without one a single slow
+  descriptor hangs ⌥space for ever with no window and no error — survivable
+  while every capability is ours, not once the path is open.
 
 ## What `_lib.sh` already does for you
 
@@ -132,6 +158,7 @@ started to differ.
 | `workspace_rows <exclude>` | occupied workspaces plus the first empty one, annotated |
 | `json_update <file> <jq args…>` | atomic read-modify-write through `mktemp` |
 | `repaint` | nudge the bar so a change shows now, not on the next switch |
+| `theme_dir` / `theme_names` | resolve a theme through `DOT_THEME_PATH` |
 | `_ledger_lib` / `_chrome_lib` | source the ledger or Chrome-profile owner, once, on first use — then `ledger_rows`, `scene_of`, `ids_of`, `workspaces_of`, `chrome_pick_profile` and the rest are yours |
 
 Two things deliberately *not* there: `SCENES_JSON`, because the shipped file

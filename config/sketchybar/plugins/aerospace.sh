@@ -97,7 +97,10 @@ fi
 
 # "NAME=tint,edge,deep;…" so awk can look a badge up instead of forking.
 BADGES=""
-for b in PEACH TEAL MAUVE BLUE GREEN; do
+# Derived from the theme, not listed here. A theme that exports a sixth
+# BADGE_<NAME>_TINT gets a sixth badge colour; enumerating them meant a scene
+# asking for one silently fell back to BLUE.
+for b in $(compgen -e | sed -n 's/^BADGE_\(.*\)_TINT$/\1/p'); do
   t=""; e=""; d=""
   eval "t=\${BADGE_${b}_TINT:-}"
   eval "e=\${BADGE_${b}_EDGE:-}"

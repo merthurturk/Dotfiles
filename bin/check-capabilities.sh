@@ -17,9 +17,11 @@ export DOT_ROOT="$REPO"
 fail=0
 n=0
 
-for cmd in "$LIBEXEC"/*; do
-  name="$(basename "$cmd")"
-  case "$name" in _*) continue ;; esac
+# Through the same resolution the dispatcher uses, so an override on DOT_PATH
+# is what gets validated -- checking the shipped file while a different one
+# runs is the drift this script exists to prevent.
+while IFS=$'\t' read -r name cmd; do
+  [ -n "$name" ] || continue
   n=$((n+1))
 
   [ -x "$cmd" ] || { echo "not executable: $name" >&2; fail=1; continue; }
@@ -46,7 +48,7 @@ for cmd in "$LIBEXEC"/*; do
   printf '%s' "$d" | jq -e '
     (.instances // []) | all(has("label") and ((.args // []) | type == "array"))
   ' >/dev/null 2>&1 || { echo "$name: malformed .instances" >&2; fail=1; }
-done
+done < <(DOT_ROOT="$REPO" "$REPO/bin/dot" capabilities --paths)
 
 # The palette must render without error.
 "$REPO/libexec/dot/menu" --dry-run >/dev/null 2>&1 \

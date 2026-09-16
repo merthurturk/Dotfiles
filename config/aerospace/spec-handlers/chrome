@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+#
+# chrome:<url> [url...]  -- a new Chrome window with those tabs.
+#
+# $SCENE_PROFILE_DIR is the Chrome profile directory the scene resolved, or
+# "Default". See config/aerospace/chrome-lib.sh.
+
+set -u
+before="$(snapshot_windows)"
+# Deliberately unquoted: several URLs become several tabs.
+# shellcheck disable=SC2086
+open -na "Google Chrome" --args --profile-directory="${SCENE_PROFILE_DIR:-Default}" \
+     --new-window $1
+wait_for_new_window "$before"

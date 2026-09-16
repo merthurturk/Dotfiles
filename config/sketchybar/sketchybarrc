@@ -87,142 +87,49 @@ default=(
 )
 sketchybar --default "${default[@]}"
 
-##### Scene launcher #####
-# Leftmost so it reads as a launcher. Left click opens a named window layout on
-# an empty workspace; right click closes it. See ~/.config/aerospace/scene.sh
-
-sketchybar --add item scene left \
-           --set scene icon="󰅶" \
-                 icon.font="$ICON_FONT:Bold:16.0" \
-                 icon.color="$PEACH" \
-                 icon.padding_left=10 \
-                 icon.padding_right=10 \
-                 label.drawing=off \
-                 background.color="$GROUP_BG" \
-                 background.border_color="$GROUP_BORDER" \
-                 script="$PLUGIN_DIR/hover.sh" \
-                 click_script="$PLUGIN_DIR/scene_click.sh" \
-           --subscribe scene mouse.entered mouse.exited
-
-##### AeroSpace workspaces #####
-
-sketchybar --add event aerospace_workspace_change
-
-for ws in $(aerospace list-workspaces --all); do
-  sketchybar --add item space."$ws" left \
-             --set space."$ws" \
-                   icon="$ws" \
-                   icon.font="$FONT_BOLD:14.0" \
-                   icon.padding_left=9 \
-                   icon.padding_right=5 \
-                   label.font="$APP_FONT" \
-                   label.padding_right=9 \
-                   label.y_offset=-1 \
-                   background.color="$WS_OCCUPIED_BG" \
-                   background.border_color="$WS_OCCUPIED_BORDER" \
-                   drawing=off \
-                   script="$PLUGIN_DIR/hover.sh" \
-                   click_script="aerospace workspace $ws" \
-             --subscribe space."$ws" mouse.entered mouse.exited
-done
-
-# Hidden driver item: one script call repaints every pill above.
+##### Items #####
 #
-# The event-bridge agent covers the fast paths (workspace switches, new windows,
-# focus moves -- including the focus change that follows moving the focused
-# window to another workspace). AeroSpace emits no event at all for a window
-# being closed, or for one moved by id from a script, so a slow poll backstops
-# those rather than leaving the bar stale.
-sketchybar --add item spaces_watcher left \
-           --set spaces_watcher drawing=off \
-                 update_freq=5 \
-                 script="$PLUGIN_DIR/aerospace.sh" \
-           --subscribe spaces_watcher aerospace_workspace_change \
-                                      front_app_switched \
-                                      space_windows_change \
-                                      display_change
+# Every item is a file. sketchybarrc keeps the bar, the defaults and the
+# geometry; what is *in* the bar is a directory, so adding a widget no longer
+# means editing this file -- and a widget of your own survives `git pull`.
+#
+# Earlier directories win by filename, the same rule DOT_PATH uses for
+# capabilities. This was the last hand-maintained registry in the repo.
 
-##### Binding mode indicator #####
+SKETCHY_ITEM_PATH="${SKETCHY_ITEM_PATH:-${XDG_CONFIG_HOME:-$HOME/.config}/dot/sketchybar/items:$CONFIG_DIR/items}"
 
-sketchybar --add item aerospace_mode left \
-           --set aerospace_mode drawing=off \
-                 icon="󰘳" \
-                 icon.color="$BASE" \
-                 label.color="$BASE" \
-                 label.font="$FONT_BOLD:12.0" \
-                 background.color="$MAROON" \
-                 background.border_color="$MAROON"
+# Brackets group items that are defined in different files, so they are
+# collected as the items declare themselves and materialised once at the end.
+BRACKET_status=""
 
-##### Front app #####
+# Sorted by filename across every directory, not directory by directory: a
+# user file named 55- has to run between the shipped 50- and 60- if it wants to
+# append to a bracket one of them declares. Directory order still decides which
+# file wins when two share a name, so shadowing works and ordering works.
+_seen=""
+while IFS= read -r _entry; do
+  _b="${_entry%%	*}"
+  _f="${_entry#*	}"
+  case " $_seen " in *" $_b "*) continue ;; esac
+  _seen="$_seen $_b"
+  # shellcheck source=/dev/null
+  source "$_f"
+done < <(
+  for _dir in ${SKETCHY_ITEM_PATH//:/ }; do
+    [ -d "$_dir" ] || continue
+    for _f in "$_dir"/*.sh; do
+      [ -f "$_f" ] && printf '%s\t%s\n' "${_f##*/}" "$_f"
+    done
+  done | sort -t"$(printf '\t')" -k1,1 -s
+)
 
-sketchybar --add item separator left \
-           --set separator icon="│" \
-                 icon.color="$SURFACE2" \
-                 icon.font="$FONT_REGULAR:14.0" \
-                 label.drawing=off \
-                 padding_left=6 \
-                 padding_right=6
-
-sketchybar --add item front_app left \
-           --set front_app icon.font="$APP_FONT" \
-                 icon.color="$MAUVE" \
-                 label.font="$FONT_BOLD:13.0" \
-                 label.color="$TEXT" \
-                 script="$PLUGIN_DIR/front_app.sh" \
-           --subscribe front_app front_app_switched
-
-##### Right side #####
-# Added right-to-left: the clock ends up furthest right, music furthest left.
-
-# Date, time and what is next. Two items sharing the status bracket, so they
-# read as one pill while the clock can be bold and the event dim -- with one
-# label the eye went to the meeting time and read it as the current time.
-# calevent is added first, so it ends up to the right of the clock.
-sketchybar --add item calevent right \
-           --set calevent drawing=on label.drawing=off \
-                 label.font="$FONT_REGULAR:13.0" \
-                 label.padding_left=0 \
-                 padding_left=0 \
-                 label.padding_right=12 \
-                 click_script="$HOME/.local/bin/dot calendar agenda --pick" \
-           --add item clock right \
-           --set clock update_freq=15 \
-                 icon="󰅐" \
-                 icon.color="$MAUVE" \
-                 label.font="$FONT_BOLD:13.0" \
-                 label.padding_right=0 \
-                 padding_right=0 \
-                 script="$PLUGIN_DIR/clock.sh" \
-                 click_script="$HOME/.local/bin/dot calendar agenda --pick" \
-           --subscribe clock system_woke \
-           --add item battery right \
-           --set battery update_freq=120 \
-                 script="$PLUGIN_DIR/battery.sh" \
-           --subscribe battery system_woke power_source_change \
-           --add item volume right \
-           --set volume icon.color="$TEAL" \
-                 script="$PLUGIN_DIR/volume.sh" \
-           --subscribe volume volume_change
-
-sketchybar --add bracket status volume battery clock calevent \
-           --set status background.color="$GROUP_BG" \
-                 background.border_color="$GROUP_BORDER" \
-                 background.border_width=1 \
-                 background.corner_radius=$PILL_RADIUS \
-                 background.height="$PILL_HEIGHT"
-
-##### Now playing #####
-
-sketchybar --add item music right \
-           --set music update_freq=5 \
-                 drawing=off \
-                 icon.padding_left=10 \
-                 label.padding_right=12 \
-                 background.color="$GROUP_BG" \
-                 background.border_color="$GROUP_BORDER" \
-                 script="$PLUGIN_DIR/music.sh" \
-                 click_script="$PLUGIN_DIR/music_click.sh" \
-           --subscribe music media_change mouse.entered mouse.exited
+# shellcheck disable=SC2086  # a list of item names, by construction
+[ -n "$BRACKET_status" ] && sketchybar --add bracket status $BRACKET_status \
+  --set status background.color="$GROUP_BG" \
+               background.border_color="$GROUP_BORDER" \
+               background.border_width=1 \
+               background.corner_radius=$PILL_RADIUS \
+               background.height="$PILL_HEIGHT"
 
 ##### Initial paint #####
 
