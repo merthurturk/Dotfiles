@@ -70,6 +70,11 @@ _ledger_lib() {
   # shellcheck source=/dev/null
   source "$DOT_ROOT/config/aerospace/ledger-lib.sh"
 }
+_chrome_lib() {
+  [ -n "${CHROME_LOCAL_STATE:-}" ] && return 0
+  # shellcheck source=/dev/null
+  source "$DOT_ROOT/config/aerospace/chrome-lib.sh"
+}
 _scenes_lib() {
   [ -n "${SCENES_CACHE:-}" ] && return 0
   # shellcheck source=/dev/null

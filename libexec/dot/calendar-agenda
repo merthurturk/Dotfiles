@@ -5,8 +5,9 @@
 # Today, in the launcher -- the whole day, not just what is left, because the
 # thing you most often want is "what have I already agreed to".
 #
-# Choosing an event joins its call when it has one, and opens Calendar when it
-# does not. Every event on this machine keeps its Meet or Zoom link in the
+# Choosing an event joins its call when it has one -- asking which Chrome
+# profile, because a meeting link is only signed in under one of them -- and
+# opens Calendar when it does not. Every event on this machine keeps its Meet or Zoom link in the
 # *notes* rather than the url field, so the helper digs it out; see
 # config/aerospace/src/calendar.swift.
 #
@@ -34,10 +35,13 @@ if [ "${1:-}" = "--describe" ]; then
   # palette costs nothing -- the helper is not run here.
   next=""
   if [ -s "$NEXT_FILE" ]; then
-    IFS=$'\t' read -r start _e _a _c title < "$NEXT_FILE"
+    # Every column, including the join URL. `read` hands the remainder of the
+    # line to its last variable, so naming five of six puts the URL in the
+    # title -- which it did here and in the bar, from the same mistake.
+    IFS=$'\t' read -r start _e _a _c title _join < "$NEXT_FILE"
     [ -n "${title:-}" ] && next="$(date -r "$start" '+%H:%M') · $title"
   fi
-  jq -n --arg next "${next:-}" \
+  jq -n --arg next "${next:-}" --arg kb "$(keysym "$(keybinding 'dot calendar agenda')")" \
         --argjson have "$([ -s "$AGENDA_FILE" ] && echo true || echo false)" '{
     id: "calendar.agenda",
     summary: "Show what is on today",
@@ -45,7 +49,7 @@ if [ "${1:-}" = "--describe" ]; then
            {name: "--json", required: false}],
     destructive: false,
     instances: (if $have and $next != ""
-                then [{label: "Today", detail: $next, args: ["--pick"]}]
+                then [{label: "Today", detail: (if $kb != "" then $kb + "   " + $next else $next end), args: ["--pick"]}]
                 else [] end)
   }'
   exit 0
@@ -134,8 +138,13 @@ if [ "$PICK" -eq 1 ] && [ -x "$PICKER" ]; then
   # The picker hands back the label; look the row up again for its URL.
   target="$(printf '%s\n' "$rows" | awk -F'\t' -v c="$choice" '$1 == c { print $3; exit }')"
   if [ -n "$target" ]; then
-    audit "calendar join $choice"
-    open "$target"
+    # Which profile. A meeting link is only signed in under one of them, and
+    # letting Chrome pick means landing on the wrong account and being asked
+    # to switch -- the same reason `dot window split` asks.
+    _chrome_lib
+    dir="$(chrome_pick_profile "Join as which profile?")" || exit 0
+    audit "calendar join $choice ($dir)"
+    chrome_open_in "$dir" "$target"
   else
     # Calendar has no "open this event" URL scheme, but landing on the right
     # day with the event visible is the useful part.

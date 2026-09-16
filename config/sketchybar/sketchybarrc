@@ -174,9 +174,16 @@ sketchybar --add item front_app left \
 ##### Right side #####
 # Added right-to-left: the clock ends up furthest right, music furthest left.
 
-# Date, time and what is next, in one label -- see plugins/clock.sh for why
-# these used to be two chips and no longer are. Clicking opens today.
-sketchybar --add item clock right \
+# Date, time and what is next. Two items sharing the status bracket, so they
+# read as one pill while the clock can be bold and the event dim -- with one
+# label the eye went to the meeting time and read it as the current time.
+# calevent is added first, so it ends up to the right of the clock.
+sketchybar --add item calevent right \
+           --set calevent drawing=on label.drawing=off \
+                 label.font="$FONT_REGULAR:13.0" \
+                 label.padding_right=12 \
+                 click_script="$HOME/.local/bin/dot calendar agenda --pick" \
+           --add item clock right \
            --set clock update_freq=15 \
                  icon="󰅐" \
                  icon.color="$MAUVE" \
@@ -193,7 +200,7 @@ sketchybar --add item clock right \
                  script="$PLUGIN_DIR/volume.sh" \
            --subscribe volume volume_change
 
-sketchybar --add bracket status volume battery clock \
+sketchybar --add bracket status volume battery clock calevent \
            --set status background.color="$GROUP_BG" \
                  background.border_color="$GROUP_BORDER" \
                  background.border_width=1 \

@@ -24,64 +24,27 @@ if [ "${1:-}" = "--new-workspace" ]; then NEW_WORKSPACE=1; shift; fi
 
 RATIO="${1:-0.6}"
 WANT="${2:-}"
-LOCAL_STATE="$HOME/Library/Application Support/Google/Chrome/Local State"
 
-# "<display name>\t<profile directory>\t<account email>", ordered as Chrome
-# numbers them. The email is shown dimmed in the picker and is searchable.
-PROFILES="$(jq -r '
-  .profile.info_cache | to_entries
-  | sort_by(.key)[]
-  | "\(.value.name)\t\(.key)\t\(.value.user_name // "")"
-' "$LOCAL_STATE" 2>/dev/null)"
-
-if [ -z "$PROFILES" ]; then
-  echo "chrome-split: could not read Chrome profiles" >&2
-  exit 1
-fi
-
-# The picker takes "label<TAB>detail" per line.
-NAMES=()
-while IFS=$'\t' read -r name _dir email; do
-  [ -n "$name" ] && NAMES+=("$(printf '%s\t%s' "$name" "$email")")
-done <<EOF
-$PROFILES
-EOF
-
-PICKER="$DIR/bin/picker"
+# Profiles, and asking which one, belong to chrome-lib.sh -- joining a meeting
+# link needs exactly the same thing, and one of those two having its own copy
+# is how they come to disagree about which profile is which.
+# shellcheck source=/dev/null
+source "$DIR/chrome-lib.sh"
 
 if [ -n "$WANT" ]; then
-  CHOICE="$WANT"
-elif [ -x "$PICKER" ]; then
-  # Native panel: auto-focused, type-to-filter, arrows + enter, esc to cancel.
+  PROFILE_DIR="$(chrome_profile_dir "$WANT")"
+  [ -n "$PROFILE_DIR" ] || { echo "chrome-split: unknown profile '$WANT'" >&2; exit 1; }
+else
   # Shift+Return on the same row opens on a fresh workspace instead of beside
   # the current window: one row per profile, two destinations.
-  CHOICE="$(printf '%s\n' "${NAMES[@]}" \
-    | PICKER_PROMPT="Which Chrome profile?" PICKER_CONTEXT=chrome-profile \
-      PICKER_ALT_HINT="new workspace" "$PICKER")"
+  export PICKER="$DIR/bin/picker"
+  PROFILE_DIR="$(chrome_pick_profile "Which Chrome profile?" "new workspace")"
+  # Exit 2 is the picker's alt-select: same profile, different destination.
   [ "$?" -eq 2 ] && NEW_WORKSPACE=1
-else
-  # Fallback if the picker hasn't been built. It has no detail column, so strip
-  # the tab-separated email off each entry.
-  PLAIN=("${NAMES[@]%%$'\t'*}")
-  CHOICE="$(osascript -l JavaScript -e '
-function run(argv) {
-  var app = Application.currentApplication();
-  app.includeStandardAdditions = true;
-  app.activate();
-  var picked = app.chooseFromList(argv, {
-    withPrompt: "Which Chrome profile?",
-    withTitle: "Split with Chrome",
-    defaultItems: [argv[0]]
-  });
-  return picked === false ? "" : picked[0];
-}' "${PLAIN[@]}" 2>/dev/null)"
 fi
 
 # Cancelled: leave the layout untouched.
-[ -z "$CHOICE" ] && exit 0
-
-PROFILE_DIR="$(printf '%s\n' "$PROFILES" | awk -F'\t' -v n="$CHOICE" '$1 == n { print $2; exit }')"
-[ -n "$PROFILE_DIR" ] || { echo "chrome-split: unknown profile '$CHOICE'" >&2; exit 1; }
+[ -z "${PROFILE_DIR:-}" ] && exit 0
 
 # Capture before opening: `open -a` activates Chrome, which moves focus, and
 # AeroSpace does not reliably place the new window where you were. The menu

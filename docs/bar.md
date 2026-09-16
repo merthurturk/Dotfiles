@@ -74,7 +74,7 @@ falls back to Hack.
 
 ## Date, time and what is next
 
-One label, in the status group:
+Two items sharing the status bracket, so they read as one pill:
 
 ```
 󰅐 Wed 16 Sep  06:47                              nothing on
@@ -89,6 +89,11 @@ the *date* while the calendar chip carried a *time*. Both are "when". Now the
 whole of "when" is one sentence and the status group keeps the machine's own
 state — volume, battery — beside it.
 
+**The clock is bold and full-strength; the event is dim.** That is why it is
+two items rather than one label — sketchybar styles an item, not part of a
+label, and with a single label the eye went to the *meeting* time and read it
+as the current time.
+
 The icon is the state. A clock when there is nothing ahead, a calendar when
 there is, and its colour says how soon. Only the **title** truncates, never the
 date or the time: the part that is always true should not be the part that gets
@@ -97,8 +102,13 @@ the clock.
 
 Clicking opens today in the picker — which does two more things.
 
-**Joining.** Every event that has a call shows `󰕧`, and choosing it opens the
-link rather than Calendar. Google and Zoom both bury that link in the event
+**Joining.** Every event that has a call shows `󰕧`, and choosing it asks which
+Chrome profile and opens the link there rather than opening Calendar. It asks
+because a meeting link is only signed in under one account, and letting Chrome
+choose means landing on the wrong one and being invited to switch — the same
+reason `dot window split` asks. Profiles come from
+`config/aerospace/chrome-lib.sh`, which `window split` shares, so the two can
+never disagree about which profile is which. Google and Zoom both bury that link in the event
 *notes* and leave `url` empty — every event on this machine did — so the helper
 searches `url`, `location` and `notes`, in that order, for Meet, Zoom, Teams,
 Webex, Jitsi and Whereby. The picker is shown the service name; the URL travels
