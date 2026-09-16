@@ -3,8 +3,15 @@
 # dot calendar agenda [--pick] [--json]
 #
 # Today, in the launcher -- the whole day, not just what is left, because the
-# thing you most often want is "what have I already agreed to". Choosing an
-# event opens Calendar.
+# thing you most often want is "what have I already agreed to".
+#
+# Choosing an event joins its call when it has one, and opens Calendar when it
+# does not. Every event on this machine keeps its Meet or Zoom link in the
+# *notes* rather than the url field, so the helper digs it out; see
+# config/aerospace/src/calendar.swift.
+#
+# World clocks ride in the picker header rather than as rows, because they are
+# context for the list and not things you can choose.
 #
 # The bar shows only what is next and only when it is close; this is the whole
 # day, which is a different question and wants a different surface. It is the
@@ -19,6 +26,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 # permission, and asking it again from a shell would be asking with the
 # shell's grant instead, which is a different and usually absent one.
 AGENDA_FILE="$STATE_DIR/agenda.tsv"
+CLOCKS="$DOT_ROOT/config/aerospace/world-clocks.tsv"
 NEXT_FILE="$STATE_DIR/next-event.tsv"
 
 if [ "${1:-}" = "--describe" ]; then
@@ -70,33 +78,70 @@ if [ "$AS_JSON" -eq 1 ]; then
 fi
 
 NOW="$(date +%s)"
-rows="$(printf '%s\n' "$ROWS" | while IFS=$'\t' read -r start end allday cal title; do
+
+# Whoever you work with, in the header. See config/aerospace/world-clocks.tsv.
+world_clocks() {
+  [ -r "$CLOCKS" ] || return 0
+  local label tz out=""
+  while IFS=$'\t' read -r label tz; do
+    [ -n "${label:-}" ] && [ -n "${tz:-}" ] || continue
+    [ "${label#\#}" = "$label" ] || continue
+    out="$out${out:+   }$label $(TZ="$tz" date '+%H:%M')"
+  done < "$CLOCKS"
+  printf '%s' "$out"
+}
+
+# Three columns: the label, what the picker shows dimmed, and the URL it never
+# sees. if/elif rather than `case`, deliberately: macOS ships bash 3.2, whose
+# parser counts parentheses inside $( ) and miscounts a case pattern's closing
+# one. The whole substitution then mis-parses and every variable in the loop
+# reads as unbound, blaming a line that has nothing wrong with it.
+service_of() {
+  if   [ "${1#*meet.google.com}"     != "$1" ]; then printf 'Google Meet'
+  elif [ "${1#*zoom.us}"             != "$1" ]; then printf 'Zoom'
+  elif [ "${1#*teams.microsoft.com}" != "$1" ]; then printf 'Teams'
+  elif [ "${1#*webex.com}"           != "$1" ]; then printf 'Webex'
+  else printf 'Join'
+  fi
+}
+
+rows="$(printf '%s\n' "$ROWS" | while IFS=$'\t' read -r start end allday cal title join; do
   if [ "$allday" = "1" ]; then
     when="all day"
   else
     when="$(date -r "$start" '+%H:%M')–$(date -r "$end" '+%H:%M')"
   fi
+
   # A mark for what is running now, so the current row is findable at a glance.
   # Not for all-day events: they are "now" from midnight to midnight, which
   # marks them every time and tells you nothing.
   mark="  "
   [ "$allday" = "0" ] && [ "$NOW" -ge "$start" ] && [ "$NOW" -lt "$end" ] && mark="▸ "
-  printf '%s%-13s  %s\t%s\n' "$mark" "$when" "$title" "$cal"
+
+  # A glyph for the ones you can join, so they are findable without reading.
+  if [ -n "${join:-}" ]; then
+    printf '%s%-13s  󰕧 %s\t%s\t%s\n' "$mark" "$when" "$title" "$(service_of "$join")" "$join"
+  else
+    printf '%s%-13s  %s\t%s\t\n' "$mark" "$when" "$title" "$cal"
+  fi
 done)"
 
-# --pick, not "stdout is not a tty". Inferring a GUI from the absence of a
-# terminal opens a panel for every scripted run and then blocks on an answer
-# nobody is there to give -- which is exactly what it did the first time this
-# was tested. The bar's click_script and the launcher pass the flag; everything
-# else gets text.
 if [ "$PICK" -eq 1 ] && [ -x "$PICKER" ]; then
-  choice="$(printf '%s\n' "$rows" | pick "Today" calendar-agenda)"
+  choice="$(printf '%s\n' "$rows" | cut -f1,2 \
+            | PICKER_HEADER="$(world_clocks)" pick "Today" calendar-agenda)"
   [ -n "$choice" ] || exit 0
-  # Calendar has no "open this event" URL scheme, but it does take a date, and
-  # landing on the right day with the event visible is the useful part.
-  title="${choice#*  }"; title="${title#"${title%%[![:space:]]*}"}"
-  audit "calendar agenda -> $title"
-  open -a Calendar
+
+  # The picker hands back the label; look the row up again for its URL.
+  target="$(printf '%s\n' "$rows" | awk -F'\t' -v c="$choice" '$1 == c { print $3; exit }')"
+  if [ -n "$target" ]; then
+    audit "calendar join $choice"
+    open "$target"
+  else
+    # Calendar has no "open this event" URL scheme, but landing on the right
+    # day with the event visible is the useful part.
+    audit "calendar agenda -> $choice"
+    open -a Calendar
+  fi
 else
-  printf '%s\n' "$rows" | awk -F'\t' '{ printf "%s\n", $1 }'
+  printf '%s\n' "$rows" | awk -F'\t' '{ print $1 }'
 fi

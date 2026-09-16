@@ -23,7 +23,9 @@ WHEN="$(date '+%a %d %b  %H:%M')"
 ICON="󰅐"; ICON_COLOR="$MAUVE"; LABEL="$WHEN"
 
 if [ -s "$NEXT_FILE" ]; then
-  IFS=$'\t' read -r START _END ALLDAY _CAL TITLE < "$NEXT_FILE"
+  # Every field, including the join URL: `read` gives the remainder of the
+  # line to its last variable, so leaving one out put the URL in the title.
+  IFS=$'\t' read -r START _END ALLDAY _CAL TITLE _JOIN < "$NEXT_FILE"
   if [ -n "${TITLE:-}" ] && [ "${ALLDAY:-1}" = "0" ]; then
     NOW="$(date +%s)"
     MINS=$(( (START - NOW + 59) / 60 ))

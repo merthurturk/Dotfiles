@@ -254,7 +254,11 @@ The clock carries all three:
 ```
 
 The icon says how soon — a clock when nothing is ahead, a calendar going amber
-then green as it arrives. Clicking opens today in the picker.
+then green as it arrives.
+
+Clicking opens today in the picker: world clocks in the header, and every event
+with a call marked `󰕧` so choosing it joins rather than opening Calendar. Edit
+the cities in `config/aerospace/world-clocks.tsv`.
 
 ```sh
 dot calendar agenda           # today, as text

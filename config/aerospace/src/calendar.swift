@@ -22,7 +22,8 @@
 // process, so the grant belongs to this bundle and nothing else needs one.
 // The bar and the launcher then read files and do no work at all.
 //
-// Output is tab-separated: <epoch start> <epoch end> <all-day> <calendar> <title>
+// Output is tab-separated:
+//   <epoch start> <epoch end> <all-day> <calendar> <title> <join url>
 // `next` prints one row or nothing at all, which is what lets the bar chip say
 // "draw nothing" without parsing anything.
 
@@ -92,12 +93,41 @@ func flag(_ name: String) -> String? {
 }
 let events = todaysEvents()
 
+// The link you would actually click. Google and Zoom both bury it in the notes
+// rather than the url field -- every event on this machine had `url` empty and
+// "Join with Google Meet: https://meet.google.com/..." in the body -- so all
+// three fields are searched, in the order most likely to be deliberate.
+let joinPatterns = [
+    #"https://meet\.google\.com/[a-z0-9-]+"#,
+    #"https://[a-z0-9.-]*zoom\.us/j/[0-9]+(\?[^\s<>"]*)?"#,
+    #"https://teams\.microsoft\.com/l/meetup-join/[^\s<>"]+"#,
+    #"https://[a-z0-9.-]*webex\.com/[^\s<>"]+"#,
+    #"https://meet\.jit\.si/[^\s<>"]+"#,
+    #"https://[a-z0-9.-]*whereby\.com/[^\s<>"]+"#,
+]
+
+@Sendable func joinURL(_ ev: EKEvent) -> String {
+    let haystack = [ev.url?.absoluteString, ev.location, ev.notes]
+        .compactMap { $0 }.joined(separator: "\n")
+    guard !haystack.isEmpty else { return "" }
+    for pattern in joinPatterns {
+        guard let re = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive)
+        else { continue }
+        let range = NSRange(haystack.startIndex..., in: haystack)
+        if let m = re.firstMatch(in: haystack, range: range),
+           let r = Range(m.range, in: haystack) {
+            return String(haystack[r])
+        }
+    }
+    return ""
+}
+
 @Sendable func row(_ ev: EKEvent) -> String {
     let title = (ev.title ?? "(no title)").replacingOccurrences(of: "\t", with: " ")
     let name = (ev.calendar?.title ?? "").replacingOccurrences(of: "\t", with: " ")
     return [String(Int(ev.startDate.timeIntervalSince1970)),
             String(Int((ev.endDate ?? ev.startDate).timeIntervalSince1970)),
-            ev.isAllDay ? "1" : "0", name, title].joined(separator: "\t")
+            ev.isAllDay ? "1" : "0", name, title, joinURL(ev)].joined(separator: "\t")
 }
 
 // Where `watch` publishes. The bar reads the first of these on a timer and

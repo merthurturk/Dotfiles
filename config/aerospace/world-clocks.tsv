@@ -1,0 +1,10 @@
+# Shown in the header when you open the agenda. One per line:
+#
+#   <label><TAB><IANA timezone>
+#
+# Your own time is already in the bar, so this is for the people you work with.
+# `TZ=Asia/Tokyo date` is the quickest way to check an identifier is real.
+San Francisco	America/Los_Angeles
+New York	America/New_York
+London	Europe/London
+Berlin	Europe/Berlin

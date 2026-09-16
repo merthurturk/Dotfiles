@@ -95,7 +95,25 @@ date or the time: the part that is always true should not be the part that gets
 cut. An all-day event is not "what is next" at a time, so it does not displace
 the clock.
 
-Clicking opens today in the picker.
+Clicking opens today in the picker — which does two more things.
+
+**Joining.** Every event that has a call shows `󰕧`, and choosing it opens the
+link rather than Calendar. Google and Zoom both bury that link in the event
+*notes* and leave `url` empty — every event on this machine did — so the helper
+searches `url`, `location` and `notes`, in that order, for Meet, Zoom, Teams,
+Webex, Jitsi and Whereby. The picker is shown the service name; the URL travels
+in a third column it never sees, because a raw meeting link is forty characters
+of noise in a column meant to be read at a glance.
+
+**World clocks**, in the header rather than as rows — they are context for the
+list, not things you can choose. Edit `config/aerospace/world-clocks.tsv`:
+
+```
+San Francisco	America/Los_Angeles
+New York	America/New_York
+```
+
+Your own time is already in the bar, so this is for the people you work with.
 
 The events come from **EventKit**, the local store macOS Calendar syncs into.
 That is the whole reason for the route: a Google account added under *System

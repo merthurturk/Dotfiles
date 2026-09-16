@@ -247,6 +247,11 @@ fullscreen when that is genuinely what you want (a video, say).
   `dot window reflow` spent a long time appearing to work; it now reflows the
   visible workspaces and queues the rest for the moment you arrive on them.
   `dot window geometry` is what made this visible.
+- **bash 3.2 miscounts `case` parentheses inside `$( )`.** A pattern's closing
+  `)` unbalances the substitution's paren counting, the whole body mis-parses,
+  and every variable in it reports as *unbound* — blaming a line that has
+  nothing wrong with it. Either put a leading `(` on each pattern, or use
+  `if`/`elif`; `libexec/dot/calendar-agenda` does the latter and says why.
 - **No geometry in the CLI.** `%{monitor-width}` doesn't parse; monitor size
   comes from `NSScreen`, matched by name. Window frames come from
   `CGWindowListCopyWindowInfo`, which needs no permission and whose
