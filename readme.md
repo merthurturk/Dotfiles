@@ -69,7 +69,7 @@ Right: now-playing, and a volume/battery/clock cluster.
 
 - **Now playing** — Apple Music; click focuses its window *through AeroSpace*,
   so it switches to the right workspace. Hidden when Music isn't running.
-- **Hover** — clickable items (workspace pills, ☕, Focus, now-playing) take a
+- **Hover** — clickable items (workspace pills, ☕, the clock, now-playing) take a
   blue ring on `mouse.entered`. Only the *border* changes, never the fill, so it
   reads correctly over every state colour.
 
@@ -78,15 +78,14 @@ clickable items — the ring is the whole affordance available.
 
 ## Keybindings on top of the AeroSpace defaults
 
-| Key | Action |
-|---|---|
-| `⌥space` | **Command palette** — every action, searchable, with its keybinding shown |
-| `⌥⇧↩` | New Chrome window beside the focused one at 3/5–2/5, asking which profile |
-| ⇧↩ *in that picker* | …open it on a fresh workspace instead of beside |
-| `⌥⇧\` | `balance-sizes` — reset the workspace to even splits |
-| `⌃⌘F` | Fill the workspace with this window — **not** macOS fullscreen, so the layout survives |
-| `⌥⇧space` | Open the `chill` scene on an empty workspace (also left-click the ☕ button) |
-| `⌥⇧⌫` | Close the scene on the focused workspace (also right-click ☕) |
+There is no table here on purpose. `dot keys` renders every binding out of
+`aerospace.toml`, grouped, with what each one does — and a table written by hand
+is wrong the first time you rebind something. This one was, twice, before it was
+deleted.
+
+```sh
+dot keys          # or ⌥⇧space then k
+```
 
 `dot window summon "<App>" <ratio>` does the same for any app, summoning an
 existing window instead of opening a new one. Bind more with:
@@ -165,27 +164,14 @@ arguments, whether it is destructive and how it is guarded.
 one: everything below is reachable from it, and each entry shows its own
 keybinding, so it doubles as the place to rediscover a binding you've forgotten.
 
-```
-Open scene: chill          ⌥⇧space
-Close scene: chill         workspace 3
-Focus: turn off            Do Not Disturb is on
-Focus settings             right-click the bar chip
-Chrome beside this window  ⌥⇧↩
-Balance window sizes       ⌥⇧\
-Reset workspace layout     ⌥⇧; then r
-Toggle floating / tiling   ⌥⇧; then f
-Toggle fullscreen
-Close focused window
-Go to workspace 2          Google Chrome
-Go to workspace 4          Music
-Focus Music                Philip Sayce — Once
-Reload AeroSpace config
-Reload SketchyBar
+```sh
+dot menu --dry-run    # exactly what the palette will show, right now
 ```
 
-The menu is rebuilt on every invocation, so it reflects current state: Focus
-reads on or off with the live mode name, only *open* scenes offer a Close, only
-*occupied* workspaces are listed and they're labelled with the apps on them.
+The menu is rebuilt on every invocation, so it reflects current state: only
+*open* scenes offer a Close, only *occupied* workspaces are listed and they are
+labelled with the apps on them, and the calendar row appears only when there is
+something left today.
 
 ### Keeping it complete
 
@@ -277,17 +263,7 @@ first time it runs — `dot doctor` says so if it is still missing.
 
 ## The leader key
 
-`⌥⇧space`, then one letter:
-
-| | |
-|---|---|
-| `s` | scenes |
-| `w` | windows |
-| `t` | themes |
-| `c` | today's agenda |
-| `k` | this list |
-| `space` | everything |
-| `esc` | back out |
+`⌥⇧space`, then one letter — `dot keys` lists them, and so does `⌥⇧space k`.
 
 Thirty-odd capabilities do not fit on thirty-odd chords, and most of what this
 setup can do was reachable only through the palette. One chord plus a mnemonic

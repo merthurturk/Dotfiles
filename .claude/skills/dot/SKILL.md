@@ -1,6 +1,6 @@
 ---
 name: dot
-description: Control this macOS setup (AeroSpace tiling, SketchyBar, scenes, themes, Focus) through the `dot` command. Use whenever the request is to change, inspect or troubleshoot the window manager, the bar, a scene, the theme, or macOS Focus.
+description: Control this macOS setup (AeroSpace tiling, SketchyBar, scenes, themes, the calendar chip) through the `dot` command. Use whenever the request is to change, inspect or troubleshoot the window manager, the bar, a scene, or the theme.
 ---
 
 # dot
@@ -44,12 +44,9 @@ drifts and "close the focused workspace" will eventually fire at the wrong one.
 
 ## What `dot` cannot do
 
-TCC permissions — Full Disk Access, Accessibility, Automation — cannot be
+TCC permissions — Accessibility, Accessibility, Automation — cannot be
 granted by any process. `dot doctor` reports what is missing and exactly where
 to click; surface that to the user rather than trying to work around it.
-
-macOS also has no CLI for changing Focus; `dot focus toggle` runs a Shortcuts
-shortcut, which the user must have created.
 
 ## Health
 

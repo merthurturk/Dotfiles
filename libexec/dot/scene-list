@@ -12,7 +12,7 @@ if [ "${1:-}" = "--describe" ]; then
   exit 0
 fi
 
-# scene.sh owns the scenes.json + scenes.local.json merge; ask it rather than
+# scenes-lib.sh owns the scenes.json + scenes.local.json merge; ask it rather than
 # repeating it here, which is how a scene you saved could be missing from this
 # list while showing up in the launcher.
 defined_json="$(scenes_json | jq -c 'keys')"

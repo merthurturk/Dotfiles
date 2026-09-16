@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 #
-# SketchyBar configuration for AeroSpace — Catppuccin Latte (light).
+# SketchyBar configuration for AeroSpace — the active theme in themes/.
 #
 # Workspace pills are plain items (not mission-control `space` items) because
 # AeroSpace manages its own workspaces on a single macOS space. They are
 # refreshed as a batch by plugins/aerospace.sh, driven by the
-# `aerospace_workspace_change` event that ~/.aerospace.toml triggers.
+# `aerospace_workspace_change` event that the event bridge triggers.
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 export CONFIG_DIR="$HOME/.config/sketchybar"

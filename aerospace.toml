@@ -1,5 +1,5 @@
-# Place a copy of this config to ~/.aerospace.toml
-# After that, you can edit ~/.aerospace.toml to your liking
+# This file IS ~/.aerospace.toml -- install.sh symlinks it, so edit it here.
+# Do not copy it into place; a copy stops tracking the repo silently.
 
 # Config version for compatibility and deprecations
 # See: https://nikitabobko.github.io/AeroSpace/guide#config-version
@@ -129,10 +129,10 @@ gaps.outer.right =      10
     alt-shift-k = 'move up'
     alt-shift-l = 'move right'
 
-    # Summon an app beside the focused window and set the split.
-    # The script resolves the monitor width itself, so the ratio holds on any
-    # display. See ~/.config/aerospace/split-with.sh
-    # New Chrome window beside the focused one, asking which profile first.
+    # A new Chrome window beside the focused one, asking which profile first.
+    # The ratio holds on any display: the split is computed from the monitor
+    # the window is actually on. `dot window summon` does the same for any app,
+    # summoning an existing window instead of opening one.
     alt-shift-enter = 'exec-and-forget $HOME/.local/bin/dot window split 0.6'
     # Same, but summons an existing window of any app instead of opening one.
     # alt-shift-0 = 'exec-and-forget $HOME/.local/bin/dot scene open messaging'

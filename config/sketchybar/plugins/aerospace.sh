@@ -37,7 +37,6 @@ if [ "$SENDER" = "display_change" ]; then
 fi
 
 FOCUSED="${FOCUSED_WORKSPACE:-$(aerospace list-workspaces --focused)}"
-SCENES_STATE="${XDG_STATE_HOME:-$HOME/.local/state}/aerospace/scenes"
 
 # --- gather once ----------------------------------------------------------
 
@@ -64,10 +63,13 @@ done < <(printf '%s\n' "$WINDOWS" | cut -d'|' -f2- | sort -u)
 # TSV is cached so it pays no jq either.
 # shellcheck source=/dev/null
 source "$HOME/.config/aerospace/scenes-lib.sh"
+# shellcheck source=/dev/null
+source "$HOME/.config/aerospace/ledger-lib.sh"
 SCENE_DEFS="$(scenes_defs_tsv)"
 
-SCENE_STATE=""
-[ -f "$SCENES_STATE" ] && SCENE_STATE="$(sed 's/^/S\t/' "$SCENES_STATE")"
+# Through the owner, not the raw file: the ledger's column layout is
+# ledger-lib.sh's business, and this plugin sources it a few lines below anyway.
+SCENE_STATE="$(ledger_rows | sed 's/^/S\t/')"
 
 # Keep the ledger in the order you last looked at each scene, so `dot scene
 # last` can bounce between the two you are using. This used to be a second
@@ -85,8 +87,6 @@ SCENE_STATE=""
 # moment to check the split is what the scene declared. --arrived is cheap when
 # there is nothing to do: one geometry read and a comparison. Not on
 # display_change -- the branch above already launched a full reflow.
-# shellcheck source=/dev/null
-source "$HOME/.config/aerospace/ledger-lib.sh"
 if ledger_touch "$FOCUSED" && [ "$SENDER" != "display_change" ]; then
   ( "$HOME/.local/bin/dot" window reflow --arrived "$FOCUSED" >/dev/null 2>&1 & )
 fi

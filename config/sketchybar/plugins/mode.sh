@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 #
 # Shows an indicator while AeroSpace is in a non-main binding mode.
-# Invoked from ~/.aerospace.toml as: mode.sh <mode-name>
+# Invoked from config/aerospace/event-bridge.sh on a mode-changed event --
+# aerospace.toml's on-mode-changed is empty, because the bridge subscribes to
+# the event stream once instead of every binding carrying its own trigger.
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 

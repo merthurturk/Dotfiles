@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 #
 # scene.sh <scene> [chrome-profile-name]   open a named layout
-# scene.sh close [workspace]               close everything on a scene workspace
+# scene.sh close [--force] [--quit|--no-quit] [workspace]
+# scene.sh move [--stay] <to> [from]
+# scene.sh --list | --describe | --scenes-json
+#
+# Three flags that were once part of this surface -- --previous-session,
+# --forget-previous and --open-scenes -- are gone. They became functions in
+# ledger-lib.sh, which every caller sources directly, and sat here with no
+# callers at all.
 #
 # Opens a named window layout on a fresh, empty workspace: a wide "main" Chrome
 # window holding several tabs, and a narrow "side" window beside it.
@@ -37,18 +44,7 @@ trap 'rm -f "$_SCENES_FILE"' EXIT
 scenes_merged > "$_SCENES_FILE"
 SCENES_FILE="$_SCENES_FILE"
 
-# Stage on demand and print what the previous session had, as
-# "<workspace>\t<scene>" per line. The capability needs this before anything
-# else has had a chance to prune, so it cannot wait for a prune to do it.
-if [ "${1:-}" = "--previous-session" ]; then
-  previous_session_rows
-  exit 0
-fi
 
-if [ "${1:-}" = "--forget-previous" ]; then
-  forget_previous_session
-  exit 0
-fi
 
 # The merged set, for anything outside this file that needs to know what scenes
 # exist. A temp file would not outlive this process, so hand over the JSON --
@@ -68,20 +64,6 @@ if [ "${1:-}" = "--describe" ]; then
   exit 0
 fi
 
-# A read, and deliberately not a pruning one any more.
-#
-# prune_scenes asks AeroSpace which windows still exist -- once per ledger row
-# -- and then rewrites the file. That made the palette's slowest descriptor a
-# disk write and an IPC storm, on the one path where latency is felt. Every
-# writer already prunes (remember_scene calls it, close calls forget_scene), so
-# the only thing this drops is garbage-collecting a scene whose windows you
-# closed by hand, and the cost of that is a stale row in the launcher until the
-# next scene command -- at which point closing it says "already empty" and
-# forgets it, which was always the handled path.
-if [ "${1:-}" = "--open-scenes" ]; then
-  [ -f "$STATE_FILE" ] && cat "$STATE_FILE"
-  exit 0
-fi
 
 # --- close ----------------------------------------------------------------
 

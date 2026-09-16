@@ -5,16 +5,13 @@ SketchyBar, configured by `config/sketchybar/sketchybarrc`. Plugins live in
 
 ## Items, left to right
 
-| Item | Plugin | Notes |
-|---|---|---|
-| `scene` | `scene_click.sh` | ☕ launcher. Left click opens a scene, right click closes one |
-| `space.<N>` | `aerospace.sh` | one per workspace, drawn only when occupied or focused |
-| `spaces_watcher` | `aerospace.sh` | hidden driver; repaints every pill in one batched call |
-| `aerospace_mode` | `mode.sh` | binding-mode badge |
-| `separator` | — | thin divider |
-| `front_app` | `front_app.sh` | focused app, with its glyph |
-| `music` | `music.sh` / `music_click.sh` | now playing; hidden when Music isn't running |
-| `status` | — | bracket grouping volume, battery, clock |
+Deliberately not listed here. `config/sketchybar/sketchybarrc` is the list, and
+a copy of it in prose is a second registry to keep in step — which this one was
+not: it described four items the bar no longer had in that arrangement.
+
+```sh
+sketchybar --query bar | jq -r '.items[]'    # what is actually there
+```
 
 ## One script repaints all the pills
 

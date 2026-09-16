@@ -27,7 +27,6 @@ SKETCHY="$HOME/.config/sketchybar"
 SCENE_SH="$DOT_ROOT/config/aerospace/scene.sh"
 SCENES_LOCAL="$DOT_ROOT/config/aerospace/scenes.local.json"
 PICKER="$DOT_ROOT/config/aerospace/bin/picker"
-LEDGER="$STATE_DIR/scenes"
 
 # keybinding <substring of the binding's command> -> "alt-shift-space" or empty
 #
@@ -128,7 +127,7 @@ workspace_rows() {   # <workspace to leave out>
     | sort -u \
     | jq -R -s --arg cur "$1" \
           --arg empty "$($AEROSPACE list-workspaces --monitor all --empty 2>/dev/null | head -1)" \
-          --arg state "$(cat "$LEDGER" 2>/dev/null)" '
+          --arg state "$(_ledger_lib; ledger_rows)" '
         ($state | split("\n") | map(select(length>0) | split("\t"))
                 | map({(.[0]): .[1]}) | add // {}) as $scenes
         | (split("\n") | map(select(length>0) | split("|"))

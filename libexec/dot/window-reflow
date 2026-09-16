@@ -46,7 +46,7 @@ if [ "${1:-}" = "--describe" ]; then
   exit 0
 fi
 
-# scene.sh owns the scenes.json + scenes.local.json merge, tombstones included.
+# scenes-lib.sh owns the scenes.json + scenes.local.json merge, tombstones included.
 # This file used to carry its own copy of it, which is how a third one comes to
 # disagree with the other two.
 DEFS=""

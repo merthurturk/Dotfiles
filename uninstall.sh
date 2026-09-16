@@ -59,6 +59,6 @@ Left alone on purpose:
   Homebrew packages       'brew bundle cleanup --file=Brewfile' if you want them gone
   This repo               delete it yourself when you're happy
 
-Permissions you granted (Full Disk Access, Accessibility) have to be removed in
+Permissions you granted (Accessibility, Automation, Calendars) have to be removed in
 System Settings; nothing can revoke them for you.
 NOTE
