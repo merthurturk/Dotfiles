@@ -132,7 +132,21 @@ capabilities() {
   local watchdog=$!
   # shellcheck disable=SC2086
   wait $pids 2>/dev/null
-  kill "$watchdog" 2>/dev/null
+
+  # Take down the sleep as well as the subshell around it, with SIGKILL.
+  #
+  # This line used to be `kill "$watchdog"`, and it cost every ⌥space the whole
+  # three seconds. Bash does not act on a TERM in a subshell while it is
+  # waiting on a foreground child, so the signal sat queued behind `sleep 3`
+  # and `wait` below blocked until the sleep finished on its own -- turning the
+  # deadline the watchdog exists to impose into the time it always took. The
+  # palette had been measured at 165ms; it was 3.2 seconds.
+  #
+  # The child's pid has to be read before the parent dies, or it is reparented
+  # and pgrep -P finds nothing.
+  local sleeper; sleeper="$(pgrep -P "$watchdog" 2>/dev/null)"
+  # shellcheck disable=SC2086  # unquoted: empty means "no child to kill"
+  kill -9 "$watchdog" ${sleeper:-} 2>/dev/null
   wait "$watchdog" 2>/dev/null
 
   # Filenames sort the same way list_commands does, so order is unchanged.
