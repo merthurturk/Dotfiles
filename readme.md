@@ -79,10 +79,13 @@ handlers and the world-clock list each look in `~/.config/dot/` before the copy
 shipped here. You extend *or override* this setup without editing a tracked
 file, which means you can keep pulling without ever merging.
 
-**Latency is a feature.** The palette opens in ~165ms because it has to feel
-like part of the window manager rather than like a program starting. Getting
-there meant replacing an AppleScript call with a state file, caching the scene
-merge, and collapsing fifteen `jq` invocations into one.
+**Latency is a feature.** The palette has to feel like part of the window
+manager rather than like a program starting, so how long it takes is a thing
+that gets measured. Getting the descriptor sweep under 230ms meant replacing an
+AppleScript call with a state file, caching the scene merge, and collapsing
+fifteen `jq` invocations into one — and measuring again later is what caught a
+watchdog that had quietly been charging every open the full three-second
+timeout it was meant to impose.
 
 **Contrast is measured, not chosen.** Every colour a theme puts text on is
 checked at 4.5:1 by a pre-commit hook. That hook exists because the
@@ -253,7 +256,18 @@ rather than waiting for a config reload.
 
 A theme is a directory under `themes/` holding `colors.sh`, `ghostty.conf` and
 `meta.json`. The bar's palette and the terminal's theme are symlinks into the
-active one, so they cannot drift apart. The desktop picture is rendered from the
+active one, so they cannot drift apart. Making a sixth takes one command:
+
+```sh
+dot theme new "Midnight Ice" --from opal-black --accent '#7c3aed'
+```
+
+It writes to `~/.config/dot/themes/`, so your theme needs no commit here. The
+accent is not copied in, it is *fitted* — darkened, or lightened under dark
+text, until the workspace pill's label clears 4.5:1 on it — and then the new
+theme is graded on the spot with the same checker the pre-commit hook runs.
+Contrast is measured, not chosen, and that has to include the colours you pick
+five minutes from now. The desktop picture is rendered from the
 theme's own `colors.sh` at your display's pixel size, which is why there is no
 image in this repo:
 

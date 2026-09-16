@@ -73,6 +73,11 @@ Four files exist to be `source`d, not executed, so asking costs nothing:
 | `config/aerospace/ledger-lib.sh` | the open-scene ledger: format, pruning, MRU order |
 | `config/aerospace/split-lib.sh` | window sizing, gaps, monitor width |
 | `config/aerospace/chrome-lib.sh` | Chrome profiles, and asking which one |
+| `bin/color-lib.sh` | WCAG contrast, and moving a colour until it passes |
+
+`dot theme new` darkens an accent with the function `check-themes.sh` grades
+it with, so a scaffold cannot be born failing a check that is about to be
+applied to it.
 
 The scenes merge was written out in four places before this; the ledger's
 tab-separated format was parsed by five capabilities, which made its column

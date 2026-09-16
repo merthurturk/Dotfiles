@@ -14,6 +14,12 @@
 set -u
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# The contrast sum lives in one place: `dot theme new` darkens an accent with
+# the same function that grades it here, so a scaffold cannot be born failing
+# a check this would later apply.
+# shellcheck source=color-lib.sh
+source "$REPO/bin/color-lib.sh"
+
 # Every key a plugin will dereference. Missing WS_* or TEXT breaks the bar;
 # missing BADGE_* only degrades a pill, but a variant should still be complete.
 REQUIRED="BASE MANTLE CRUST SURFACE0 SURFACE1 SURFACE2 OVERLAY0 OVERLAY1
@@ -39,38 +45,14 @@ done
 # Reported, never failed: edges are meant to be subtle.
 EDGE_PAIRS="WINDOW_BORDER_INACTIVE:BASE WINDOW_BORDER_ACTIVE:BASE GROUP_BORDER:GROUP_BG"
 
-# 0xaarrggbb / 0xrrggbb -> "r g b", then WCAG relative luminance and ratio.
-ratio() {
-  # macOS awk is the one-true-awk, not gawk: no strtonum, so hex is parsed by
-  # hand. Same class of surprise as /bin/bash being 3.2.
-  awk -v a="$1" -v b="$2" '
-    function hex2(s,   i, c, n, d) {
-      n = 0
-      for (i = 1; i <= length(s); i++) {
-        c = tolower(substr(s, i, 1))
-        d = index("0123456789abcdef", c) - 1
-        if (d < 0) d = 0
-        n = n * 16 + d
-      }
-      return n
-    }
-    function chan(v) { v = v / 255; return (v <= 0.03928) ? v / 12.92 : ((v + 0.055) / 1.055) ^ 2.4 }
-    function lum(hex,   r, g, b) {
-      hex = substr(hex, length(hex) - 5)
-      r = hex2(substr(hex, 1, 2))
-      g = hex2(substr(hex, 3, 2))
-      b = hex2(substr(hex, 5, 2))
-      return 0.2126 * chan(r) + 0.7152 * chan(g) + 0.0722 * chan(b)
-    }
-    BEGIN {
-      la = lum(a); lb = lum(b)
-      hi = (la > lb) ? la : lb; lo = (la > lb) ? lb : la
-      printf "%.2f", (hi + 0.05) / (lo + 0.05)
-    }'
-}
-
+# With no argument, every theme this repo ships -- which is what the hook wants.
+# With one, that directory, so `dot theme new` can grade a theme living in
+# ~/.config/dot/themes where the hook will never look.
 fail=0
-for dir in "$REPO"/themes/*/; do
+if [ "$#" -gt 0 ]; then set -- "$@"; else set -- "$REPO"/themes/*/; fi
+for dir in "$@"; do
+  dir="${dir%/}/"
+  [ -f "$dir/colors.sh" ] || { echo "no colors.sh in $dir" >&2; fail=1; continue; }
   theme="$(basename "$dir")"
   printf '\n\033[1m%s\033[0m\n' "$theme"
 
@@ -85,7 +67,7 @@ for dir in "$REPO"/themes/*/; do
     [ -n "${fgv:-}" ] && [ -n "${bgv:-}" ] || continue
     # A transparent background means the chip has no fill of its own; the
     # thing behind it is the wallpaper, which is generated from BASE.
-    r="$(ratio "$fgv" "$bgv")"
+    r="$(contrast "$fgv" "$bgv")"
     if [ "$kind" = edge ]; then
       printf '  \033[2m·\033[0m %-42s %s:1\n' "$fg on $bg" "$r"
     elif awk -v r="$r" 'BEGIN { exit (r >= 4.5) ? 0 : 1 }'; then

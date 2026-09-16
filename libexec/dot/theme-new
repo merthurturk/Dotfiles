@@ -1,0 +1,185 @@
+#!/usr/bin/env bash
+#
+# dot theme new [name] [--from <theme>] [--accent '#7c3aed'] [--repo]
+#
+# Scaffolds a theme from one that already works. Adding a scene or a capability
+# is "drop in a file"; adding a theme was "copy a directory and hand-edit forty
+# colours, then find out from a pre-commit hook which three of them fail". This
+# is the one place where extending this setup was not pleasant.
+#
+# It writes to ~/.config/dot/themes by default, because a theme of your own
+# should not need a commit to this repo -- DOT_THEME_PATH prefers that
+# directory, so the new one is immediately listable and settable. --repo puts
+# it in themes/ instead, for working on one this repo ships.
+#
+# The accent is not copied, it is *fitted*: darkened (or lightened, under dark
+# text) until the workspace pill's label clears 4.5:1 on it. That sum is
+# bin/color-lib.sh, the same one check-themes.sh grades with, so a scaffold
+# cannot be born failing a check that is about to be applied to it.
+
+set -u
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+# shellcheck source=../../bin/color-lib.sh
+source "$DOT_ROOT/bin/color-lib.sh"
+
+USER_THEMES="${XDG_CONFIG_HOME:-$HOME/.config}/dot/themes"
+
+if [ "${1:-}" = "--describe" ]; then
+  current="$(cat "$STATE_DIR/theme" 2>/dev/null)"
+  jq -n --argjson themes "$(theme_names | jq -R -s 'split("\n")|map(select(length>0))')" \
+        --arg cur "${current:-opal-white}" '{
+    id: "theme.new",
+    summary: "Scaffold a new theme from one that already works",
+    args: [{name:"name", required:false, note:"asked for when omitted"},
+           {name:"--from", required:false, choices:$themes, default:"the active theme"},
+           {name:"--accent", required:false, note:"#rrggbb; fitted until it passes contrast"},
+           {name:"--repo", required:false, note:"write to themes/ instead of ~/.config/dot/themes"}],
+    destructive: false,
+    guard: "refuses a name that already resolves on DOT_THEME_PATH; never writes into an existing directory",
+    verify: "dot theme list",
+    instances: [{label: "New theme…", detail: ("starts from " + $cur), args: []}]
+  }'
+  exit 0
+fi
+
+NAME=""; FROM=""; ACCENT=""; IN_REPO=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --from)   FROM="${2:-}";   shift 2 ;;
+    --accent) ACCENT="${2:-}"; shift 2 ;;
+    --repo)   IN_REPO=1;       shift ;;
+    -*) echo "theme new: unknown option $1" >&2; exit 1 ;;
+    *) [ -z "$NAME" ] && NAME="$1"; shift ;;
+  esac
+done
+
+[ -n "$FROM" ] || FROM="$(cat "$STATE_DIR/theme" 2>/dev/null)"
+[ -n "$FROM" ] || FROM="opal-white"
+
+GUIDED=0
+if [ -z "$NAME" ]; then
+  GUIDED=1
+  # Which one to start from first: the answer changes what the accent list can
+  # offer, and being asked to name a thing before seeing it is the wrong order.
+  choice="$(for t in $(theme_names); do
+              d="$(theme_dir "$t")"
+              printf '%s\t%s\n' "$t" "$(jq -r '"\(.name) — \(.appearance)"' "$d/meta.json" 2>/dev/null)"
+            done | pick "Start from which theme?" theme-new-from | cut -f1)"
+  [ -n "$choice" ] || exit 0
+  FROM="$choice"
+  NAME="$(ask "Call the new theme…")"
+  [ -n "$NAME" ] || exit 0
+fi
+
+SRC="$(theme_dir "$FROM")"
+[ -n "$SRC" ] && [ -f "$SRC/colors.sh" ] || { echo "theme new: no theme '$FROM'" >&2; exit 1; }
+
+SLUG="$(slug "$NAME")"
+[ -n "$SLUG" ] || { echo "theme new: that is not a usable name" >&2; exit 1; }
+# Against the search path, not just the destination: a theme that resolves to
+# a different directory than the one written is how you edit a file for an
+# hour and see nothing change.
+[ -n "$(theme_dir "$SLUG")" ] && { echo "theme new: '$SLUG' already exists" >&2; exit 1; }
+
+DEST="$USER_THEMES/$SLUG"
+[ "$IN_REPO" -eq 1 ] && DEST="$DOT_ROOT/themes/$SLUG"
+[ -e "$DEST" ] && { echo "theme new: $DEST already exists" >&2; exit 1; }
+
+# The accent. Offered from the source theme's own palette, because a colour
+# that already sits in it is a better starting point than a colour picker.
+if [ "$GUIDED" -eq 1 ] && [ -z "$ACCENT" ]; then
+  swatch="$( set +u; source "$SRC/colors.sh"
+    for k in BLUE MAUVE TEAL GREEN PEACH RED PINK SKY SAPPHIRE LAVENDER YELLOW; do
+      v="${!k:-}"; [ -n "$v" ] || continue
+      printf '%s\t#%s\n' "$k" "$(printf '%s' "${v#0x}" | tail -c 6)"
+    done )"
+  a="$(printf 'Keep %s\tthe accent this theme already uses\n%s\n' "$FROM" "$swatch" \
+       | pick "Which accent?" theme-new-accent)"
+  [ -n "$a" ] || exit 0
+  case "$a" in
+    Keep*) ACCENT="" ;;
+    *) ACCENT="$(printf '%s' "$a" | cut -f2)" ;;
+  esac
+fi
+
+mkdir -p "$DEST" || { echo "theme new: could not create $DEST" >&2; exit 1; }
+cp "$SRC/colors.sh" "$SRC/ghostty.conf" "$SRC/meta.json" "$DEST/" 2>/dev/null \
+  || { echo "theme new: $FROM is missing one of colors.sh, ghostty.conf, meta.json" >&2
+       rmdir "$DEST" 2>/dev/null; exit 1; }
+
+# A title from the slug, so "midnight-ice" is "Midnight Ice" rather than a
+# second thing to type.
+TITLE="$(printf '%s' "$SLUG" | tr '-' ' ' | awk '{ for (i=1;i<=NF;i++) $i = toupper(substr($i,1,1)) substr($i,2); print }')"
+APPEARANCE="$(jq -r '.appearance // "light"' "$SRC/meta.json")"
+FROM_NAME="$(jq -r '.name // ""' "$SRC/meta.json")"
+
+FITTED=""; ORIGINAL=""
+if [ -n "$ACCENT" ]; then
+  # Accept '#rrggbb', 'rrggbb' or '0xaarrggbb' -- all three are things a person
+  # reasonably pastes, and two of them are what this repo's own files contain.
+  hex="$(printf '%s' "$ACCENT" | tr -d '#' | tr '[:upper:]' '[:lower:]')"
+  hex="${hex#0x}"
+  case "$hex" in
+    ????????) hex="${hex#??}" ;;
+    ??????) ;;
+    *) echo "theme new: '$ACCENT' is not a colour (want #rrggbb)" >&2; rm -rf "$DEST"; exit 1 ;;
+  esac
+  case "$hex" in *[!0-9a-f]*) echo "theme new: '$ACCENT' is not a colour (want #rrggbb)" >&2
+                              rm -rf "$DEST"; exit 1 ;; esac
+  ORIGINAL="0xff$hex"
+  FG="$( set +u; source "$DEST/colors.sh"; printf '%s' "${WS_ACTIVE_FG:-}" )"
+  FITTED="$(fit_contrast "$ORIGINAL" "$FG")" || true
+
+  {
+    printf '\n# --- this theme'"'"'s accent -----------------------------------------------\n'
+    printf '#\n'
+    printf '# Everything above is inherited from %s. These are the lines that make\n' "$FROM"
+    printf '# this theme its own: colors.sh is read top to bottom, so a later export\n'
+    printf '# wins, and you can see at a glance what you changed.\n'
+    if [ "$FITTED" != "$ORIGINAL" ]; then
+      printf '#\n# Fitted from %s, which read %s:1 under WS_ACTIVE_FG. Accents are\n' \
+             "#${hex}" "$(contrast "$ORIGINAL" "$FG")"
+      printf '# darkened until text on them clears 4.5:1 -- see bin/check-themes.sh.\n'
+    fi
+    printf 'export ACCENT=%s          # %s:1 under WS_ACTIVE_FG\n' "$FITTED" "$(contrast "$FITTED" "$FG")"
+    printf 'export WS_ACTIVE_BG=$ACCENT\n'
+    printf 'export WS_ACTIVE_BORDER=$ACCENT\n'
+    printf 'export WINDOW_BORDER_ACTIVE=$ACCENT\n'
+  } >> "$DEST/colors.sh"
+fi
+
+CURSOR="$(jq -r '.cursor // ""' "$SRC/meta.json")"
+[ -n "$FITTED" ] && CURSOR="#$(printf '%s' "${FITTED#0x}" | tail -c 6)"
+
+# `family` is dropped and `derived_from` records where this actually came from:
+# claiming membership of the Opal family is a thing the family should decide.
+jq --arg name "$TITLE" --arg app "$APPEARANCE" --arg from "${FROM_NAME:-$FROM}" \
+   --arg cursor "$CURSOR" \
+   'del(.family) | .name = $name | .appearance = $app | .derived_from = $from
+    | if $cursor == "" then . else .cursor = $cursor end' \
+   "$SRC/meta.json" > "$DEST/meta.json.tmp" && mv "$DEST/meta.json.tmp" "$DEST/meta.json"
+
+# The terminal half. A theme pointing at an upstream `theme =` keeps pointing
+# at it -- the colours are Ghostty's, and check-themes.sh has nothing to compare
+# so nothing drifts. One with its colours written out inherits them, and the
+# checker will tell you the moment they stop matching colors.sh.
+if [ -n "$FITTED" ] && grep -q '^cursor-color' "$DEST/ghostty.conf"; then
+  sed -i '' "s|^cursor-color = .*|cursor-color = $CURSOR|" "$DEST/ghostty.conf"
+fi
+
+audit "theme new $SLUG (from $FROM)"
+printf '%s created in %s\n' "$SLUG" "${DEST%/*}"
+printf '  colors.sh      %s\n' "$([ -n "$FITTED" ] && printf 'inherited from %s, accent %s' "$FROM" "$CURSOR" || printf 'a copy of %s' "$FROM")"
+printf '  ghostty.conf   %s\n' "$(grep -q '^theme = ' "$DEST/ghostty.conf" && printf 'points at %s' "$(sed -n 's/^theme = //p' "$DEST/ghostty.conf" | head -1)" || printf 'colours written out -- keep them equal to colors.sh')"
+printf '  meta.json      %s, %s\n\n' "$TITLE" "$APPEARANCE"
+
+# Grade it now. Finding out from a pre-commit hook, later, which three colours
+# fail is exactly the experience this command exists to remove -- and a theme
+# in ~/.config/dot/themes never reaches that hook at all.
+if "$DOT_ROOT/bin/check-themes.sh" "$DEST"; then
+  printf '\nNext: dot theme set %s\n' "$SLUG"
+else
+  printf '\nFix the lines marked ✗ in %s/colors.sh, then:\n' "$DEST"
+  printf '  %s/bin/check-themes.sh %s\n' "${DOT_ROOT/#$HOME/~}" "${DEST/#$HOME/~}"
+  exit 1
+fi

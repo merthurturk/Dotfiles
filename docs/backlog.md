@@ -49,14 +49,6 @@ no latency.
 publishes example events rather than a real calendar; a recording needs the same
 care.*
 
-### `dot theme new <name>`
-
-Scaffold from an existing theme, then let `check-themes.sh` grade the result.
-Copying a directory and hand-editing forty colours is the one place where adding
-something isn't pleasant.
-
-*Small.*
-
 ### A bar-only install path
 
 For people who already tile and don't want your keybindings. `install.sh` backs

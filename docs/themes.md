@@ -217,7 +217,8 @@ badges use three values rather than one:
 Measure, don't eyeball — with a command, not by hand:
 
 ```sh
-bin/check-themes.sh
+bin/check-themes.sh                       # every theme this repo ships
+bin/check-themes.sh ~/.config/dot/themes/mine   # or one directory
 ```
 
 It sources every theme, checks that no required key is missing, and measures
@@ -296,8 +297,42 @@ Neither needed a change to a script, which is the point of the layout.
 
 ## Adding a theme
 
-Copy a directory, edit `colors.sh`, add `meta.json` and `ghostty.conf`. It
-appears in `dot theme list` and the palette immediately.
+```sh
+dot theme new "Midnight Ice" --from opal-black --accent '#7c3aed'
+dot theme new                 # guided, from the launcher
+```
+
+It writes to `~/.config/dot/themes/<slug>/`, which `DOT_THEME_PATH` prefers
+over the shipped copy — so a theme of your own is listable and settable without
+a commit to this repo. `--repo` puts it in `themes/` instead, for working on
+one this repo ships.
+
+What it does beyond `cp -r`:
+
+- **fits the accent.** `--accent` is not copied in, it is darkened — or
+  lightened, under dark text — until `WS_ACTIVE_FG` on it clears 4.5:1, and the
+  header comment records what it started as and what it read. The sum is
+  `bin/color-lib.sh`, the same one `check-themes.sh` grades with, so a scaffold
+  cannot be born failing a check that is about to be applied to it.
+- **appends rather than edits.** `colors.sh` is read top to bottom, so the new
+  accent is four `export` lines at the end. Everything above is visibly
+  inherited, and what you changed is visible at a glance.
+- **grades it immediately**, printing the same table `check-themes.sh` prints.
+  Finding out from a pre-commit hook, later, which three colours fail is the
+  experience this command exists to remove — and a theme in `~/.config/dot`
+  never reaches that hook at all.
+- **drops `family`** and sets `derived_from`. Claiming membership of the Opal
+  family is a thing the family should decide.
+
+To grade one by hand afterwards, or any directory the hook will not see:
+
+```sh
+bin/check-themes.sh ~/.config/dot/themes/midnight-ice
+```
+
+Doing it the long way — copy a directory, edit `colors.sh`, add `meta.json` and
+`ghostty.conf` — still works. It appears in `dot theme list` and the palette
+immediately.
 
 A theme needs no wallpaper of its own — one is rendered from its accents. Look
 at the result before committing with
