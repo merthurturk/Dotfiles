@@ -27,6 +27,29 @@ Definitions live in `config/aerospace/scenes.json` — **data, not code**:
 | `label` | short name for the bar; defaults to the key |
 | `badge` | `PEACH`/`TEAL`/`MAUVE`/`BLUE`/`GREEN` from the theme |
 | `quit` | quit the apps this scene leaves with no windows; default `false` |
+| `key` | a chord that opens it, e.g. `ctrl-alt-c`; see below |
+
+### A chord of its own
+
+`key` is the scene's shortcut, and it lives here with the icon and the colour
+rather than in `aerospace.toml`, so it survives a pull and travels with the
+scene definition.
+
+```sh
+dot scene edit chill --key ctrl-alt-c
+dot scene edit chill --no-key
+```
+
+From the launcher, `Edit a scene… → Shortcut` offers the `⌃⌥` chords that are
+actually free — asking someone to type TOML and discover later that `⌥c` was
+already "go to workspace C" is not a question worth asking.
+
+Either way it writes the key, then runs `dot keys --apply`, which regenerates
+the managed block in `aerospace.toml`. `scene-open` turns each `key` into a
+`keys` entry in its descriptor; the mechanism and its guards are in
+[capabilities](capabilities.md#keys--asking-for-a-chord). Removing it writes
+`null` rather than deleting the field — the local file overrides the shipped
+one, and deleting would let a shipped scene's chord back in.
 
 ## Window specs
 

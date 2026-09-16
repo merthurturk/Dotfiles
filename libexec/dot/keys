@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# dot keys [--pick] [--json]
+# dot keys [--pick] [--json] [--apply] [--check]
 #
 # Every keybinding, read out of aerospace.toml. Nothing here is a list of keys
 # -- that is the point. A hand-written cheat sheet is wrong the first time you
@@ -10,6 +10,14 @@
 # What each one *does* comes from the same place the launcher gets it: a
 # `dot` binding is described by its own capability descriptor, and an AeroSpace
 # built-in is described by the command itself, which reads well enough.
+#
+# --apply closes the loop in the other direction. A descriptor could say
+# everything about a capability except the one thing you press, so a dedicated
+# chord meant hand-editing aerospace.toml -- the last place in this repo where
+# adding something meant touching a second file. A capability can now declare
+# `keys` in its own --describe, and this writes them into a marked block that
+# aerospace.toml ships empty. The TOML is still the source of truth everything
+# reads; the descriptor is just one more thing allowed to write to it.
 
 set -u
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
@@ -19,8 +27,12 @@ if [ "${1:-}" = "--describe" ]; then
     id: "keys",
     summary: "Show every keybinding",
     args: [{name: "--pick", required: false, note: "show it in the launcher"},
-           {name: "--json", required: false}],
+           {name: "--json", required: false},
+           {name: "--apply", required: false, note: "write the chords capabilities declare into aerospace.toml"},
+           {name: "--check", required: false, note: "exit non-zero if those chords are not applied"}],
     destructive: false,
+    guard: "--apply edits only its own marked block, and refuses a chord that is already bound",
+    verify: "dot keys --check",
     instances: [{label: "Keyboard shortcuts", detail: $kb, args: ["--pick"]}]
   }'
   exit 0
@@ -44,6 +56,151 @@ bindings() {
       print mode "\t" chord "\t" cmd
     }
   ' "$AERO_CONFIG"
+}
+
+# --- chords a capability declared for itself ------------------------------
+#
+# The managed block lives inside [mode.main.binding] and aerospace.toml ships
+# it *empty*, so applying only ever replaces what is between the markers. There
+# is no insertion point to compute and get wrong, and the markers explain
+# themselves in the tracked file rather than only in this script.
+TOML="$DOT_ROOT/aerospace.toml"
+BEGIN='    # --- declared keys: managed by `dot keys --apply` -----------------------'
+END='    # --- end declared keys --------------------------------------------------'
+
+# "<chord>\t<dot command with its arguments>", sorted so --check is stable.
+declared() {
+  "$DOT_ROOT/bin/dot" capabilities --json 2>/dev/null | jq -r '
+    .[] | .command as $c
+    | (.keys // [])[]
+    | [.chord, (([$c] + (.args // [])) | join(" "))] | @tsv' | sort
+}
+
+# Chords already bound in main mode, ignoring the managed block -- what a
+# declared chord must not collide with.
+taken() {
+  awk -v b="$BEGIN" -v e="$END" '
+    /^\[mode\.main\.binding\]/ { inmain = 1; next }
+    /^\[/                     { inmain = 0 }
+    !inmain { next }
+    $0 == b { skip = 1; next }
+    $0 == e { skip = 0; next }
+    skip    { next }
+    /^[[:space:]]*[a-z0-9-]+[[:space:]]*=/ {
+      line = $0; sub(/^[[:space:]]*/, "", line)
+      split(line, kv, "="); c = kv[1]; sub(/[[:space:]]+$/, "", c)
+      print c
+    }' "$TOML"
+}
+
+# What the block should contain, given the descriptors as they are right now.
+render_block() {   # <declared rows>
+  printf '%s\n' "$BEGIN"
+  printf '%s\n' "    # Chords capabilities asked for in their own --describe. Do not edit by"
+  printf '%s\n' "    # hand: \`dot keys --apply\` rewrites this block whole from the descriptors."
+  printf '%s\n' "$1" | while IFS=$'\t' read -r chord cmd; do
+    [ -n "${chord:-}" ] || continue
+    printf "    %s = 'exec-and-forget \$HOME/.local/bin/%s'\n" "$chord" "$cmd"
+  done
+  printf '%s\n' "$END"
+}
+
+# What it contains now.
+current_block() {
+  awk -v b="$BEGIN" -v e="$END" '
+    $0 == b { inblock = 1 } inblock { print } $0 == e { inblock = 0 }' "$TOML"
+}
+
+apply_keys() {   # <write? 1|0>
+  local write="$1" rows blk_new blk_now chord cmd conflict=""
+
+  grep -qF "$BEGIN" "$TOML" || {
+    echo "keys: this aerospace.toml has no declared-keys block to manage." >&2
+    echo "      Add these two lines at the end of [mode.main.binding]:" >&2
+    printf '%s\n%s\n' "$BEGIN" "$END" | sed 's/^/      /' >&2
+    return 2
+  }
+
+  rows="$(declared)"
+  blk_new="$(render_block "$rows")"
+  blk_now="$(current_block)"
+
+  if [ "$blk_new" = "$blk_now" ]; then
+    [ "$write" -eq 1 ] && echo "keys: already applied"
+    return 0
+  fi
+
+  if [ "$write" -eq 0 ]; then
+    echo "keys: declared chords are not applied -- run \`dot keys --apply\`" >&2
+    diff <(printf '%s\n' "$blk_now") <(printf '%s\n' "$blk_new") \
+      | grep -E '^[<>].*=' | sed 's/^/  /' >&2
+    return 1
+  fi
+
+  # A chord that is already bound would silently shadow -- or be shadowed by --
+  # the binding that was there first, and the person who lost is the one who
+  # did not write the descriptor. Name both sides and change nothing.
+  while IFS=$'\t' read -r chord cmd; do
+    [ -n "${chord:-}" ] || continue
+    if taken | grep -qx -- "$chord"; then
+      conflict="$conflict
+  $chord is already bound in aerospace.toml (wanted by: $cmd)"
+    fi
+  done <<<"$rows"
+  [ -n "$conflict" ] && {
+    echo "keys: refusing to apply -- these chords are taken:$conflict" >&2
+    return 1
+  }
+
+  # Through a file, never `awk -v`: macOS awk rejects a literal newline in a -v
+  # assignment, and fails by writing nothing. Copied over aerospace.toml that
+  # is an empty config, which AeroSpace parses as valid -- so the dry-run below
+  # would not have caught it either. See docs/macos.md.
+  local tmp blockfile backup
+  tmp="$(mktemp)"; blockfile="$(mktemp)"; backup="$(mktemp)"
+  trap 'rm -f "$tmp" "$blockfile" "$backup"' RETURN
+  printf '%s\n' "$blk_new" > "$blockfile"
+
+  awk -v b="$BEGIN" -v e="$END" -v bf="$blockfile" '
+    $0 == b { while ((getline line < bf) > 0) print line; skip = 1; next }
+    $0 == e { skip = 0; next }
+    !skip' "$TOML" > "$tmp" || {
+      echo "keys: could not rewrite the config" >&2; return 1; }
+
+  # The check that matters. "The result parses" was happy, once, with a file
+  # that had lost the entire config.
+  strip_block() {
+    awk -v b="$BEGIN" -v e="$END" '
+      $0 == b { skip = 1 } { if (!skip) print } $0 == e { skip = 0 }' "$1"
+  }
+  if ! diff -q <(strip_block "$TOML") <(strip_block "$tmp") >/dev/null; then
+    echo "keys: rewrite would have changed the rest of the config, refusing" >&2
+    return 1
+  fi
+
+  # reload-config validates ~/.aerospace.toml and takes no path, so the check
+  # happens after the write. Keep the old file to hand.
+  cat "$TOML" > "$backup"
+  cat "$tmp" > "$TOML"
+  if ! $AEROSPACE reload-config --dry-run >/dev/null 2>&1; then
+    echo "keys: the resulting config is invalid, nothing changed" >&2
+    $AEROSPACE reload-config --dry-run 2>&1 | sed 's/^/  /' >&2
+    cat "$backup" > "$TOML"
+    return 1
+  fi
+
+  local n; n="$(printf '%s' "$rows" | grep -c . || true)"
+  audit "keys --apply ($n declared)"
+  $AEROSPACE reload-config >/dev/null 2>&1 || true
+  if [ "$n" -eq 0 ]; then
+    echo "no capability declares a chord; the block is empty"
+  else
+    printf '%s\n' "$rows" | while IFS=$'\t' read -r chord cmd; do
+      [ -n "${chord:-}" ] || continue
+      printf '  %s  %s\n' "$(keysym "$chord")" "$cmd"
+    done
+  fi
+  return 0
 }
 
 # A `dot` binding describes itself; ask the descriptor rather than inventing a
@@ -121,13 +278,18 @@ describe_cmd() {   # <command string> <summaries>
   esac
 }
 
-PICK=0; AS_JSON=0
+PICK=0; AS_JSON=0; APPLY=-1
 for a in "$@"; do
   if [ "$a" = "--pick" ]; then PICK=1
   elif [ "$a" = "--json" ]; then AS_JSON=1
-  else echo "usage: dot keys [--pick] [--json]" >&2; exit 1
+  elif [ "$a" = "--apply" ]; then APPLY=1
+  elif [ "$a" = "--check" ]; then APPLY=0
+  else echo "usage: dot keys [--pick] [--json] [--apply] [--check]" >&2; exit 1
   fi
 done
+
+# Writing and reading are separate errands; neither needs the other's work.
+[ "$APPLY" -ge 0 ] && { apply_keys "$APPLY"; exit $?; }
 
 ROWS="$(bindings)"
 SUMS="$(summaries)"

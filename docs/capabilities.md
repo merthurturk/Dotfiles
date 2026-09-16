@@ -34,6 +34,7 @@ drift between it and reality; both are gone.
 | `verify` | for mutations | a command proving the change landed |
 | `args` | — | `[{name, required, choices, default}]` |
 | `instances` | — | menu rows; see below |
+| `keys` | — | chords this capability wants; see below |
 
 `check-capabilities.sh` **fails** if a destructive capability declares no
 `guard`. That convention is the only thing between an agent and a mistake it
@@ -67,6 +68,61 @@ at all.
 ```sh
 kb="$(keysym "$(keybinding "dot scene open $name")")"   # -> ⌥⇧space, or empty
 ```
+
+## `keys` — asking for a chord
+
+Most capabilities should ask for none. `⌥⇧space` is a leader and its letters
+open the launcher *filtered*, so anything with an `instances` entry is already
+reachable in two keystrokes. Declare a chord only when something earns a
+dedicated one.
+
+When it does:
+
+```json
+"keys": [{"chord": "ctrl-alt-c", "args": ["chill"]}]
+```
+
+`dot keys --apply` collects every declared chord and writes them into a marked
+block that `aerospace.toml` ships **empty**:
+
+```toml
+    # --- declared keys: managed by `dot keys --apply` -----------------------
+    ctrl-alt-c = 'exec-and-forget $HOME/.local/bin/dot scene open chill'
+    # --- end declared keys --------------------------------------------------
+```
+
+Because the block ships empty, applying only ever *replaces between markers* —
+there is no insertion point to compute and get wrong.
+
+This is the one thing a descriptor could not say for itself, and until it could,
+a dedicated chord meant hand-editing `aerospace.toml` — the last place in this
+repo where adding something meant touching a second file. Note what did *not*
+change: `aerospace.toml` is still the only source of truth for what is bound,
+and `dot keys` still renders the map by reading it. A descriptor is now one more
+thing allowed to write to that file, not a second copy of its contents.
+
+### What stops it going wrong
+
+| | |
+|---|---|
+| `check-capabilities.sh` | rejects a chord with no modifier (`c = '…'` takes the C key from every app), an unknown modifier, or the same chord declared twice |
+| `dot keys --apply` | refuses a chord already bound elsewhere in the config, naming both sides, and changes nothing |
+| | requires everything outside the block to come out byte-identical |
+| | writes, runs `aerospace reload-config --dry-run`, and restores the old file if AeroSpace won't parse it |
+| `dot doctor` | warns when a declared chord is not in the config — nothing applies it for you |
+
+The block travels to `awk` through a *file*, never `-v`: macOS awk rejects a
+literal newline in a `-v` assignment and fails by writing nothing, which copied
+over `aerospace.toml` is an empty config — and AeroSpace parses an empty config
+as valid, so the dry run would not have caught it either. That is not
+hypothetical; see [macos](macos.md).
+
+### Where the chord comes from
+
+It does not have to be hardcoded in the descriptor either. A scene's chord is a
+`key` field in `scenes.json`, so `scene-open` emits one `keys` entry per scene
+that has one — and `dot scene edit` sets it from the launcher, then applies.
+Data, all the way down.
 
 ## `DOT_ORIG_WS` / `DOT_ORIG_WID`
 

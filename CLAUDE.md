@@ -101,7 +101,10 @@ from that file for the same reason — there is no cheat sheet to keep in step.
 New commands usually need **no key at all**: `⌥⇧space` is a leader, and its
 letters open the launcher *filtered* (`dot menu --filter scene`), so anything
 with an `instances` entry is already reachable. Add a chord only when something
-is worth a dedicated one.
+is worth a dedicated one — and when it is, declare `keys` in the descriptor and
+run `dot keys --apply`, which owns a marked block in `aerospace.toml` the way
+`dot window pin` owns one. Do not hand-edit a binding for a `dot` command; that
+is the second registration this repo spent a long time removing.
 
 ### The launcher's PATH is not your shell's
 

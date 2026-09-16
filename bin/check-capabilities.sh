@@ -48,6 +48,43 @@ while IFS=$'\t' read -r name cmd; do
   printf '%s' "$d" | jq -e '
     (.instances // []) | all(has("label") and ((.args // []) | type == "array"))
   ' >/dev/null 2>&1 || { echo "$name: malformed .instances" >&2; fail=1; }
+
+  # A declared chord is written straight into aerospace.toml. `dot keys --apply`
+  # rolls back a config AeroSpace won't parse, but a chord that is merely *bad*
+  # -- no modifier, so it swallows the letter system-wide -- parses fine. Catch
+  # the shape here, where it is a failed commit rather than a dead keyboard.
+  printf '%s' "$d" | jq -e '
+    (.keys // []) | all(
+      (.chord | type == "string")
+      and ((.args // []) | type == "array"))
+  ' >/dev/null 2>&1 || { echo "$name: malformed .keys" >&2; fail=1; }
+
+  while IFS= read -r chord; do
+    [ -n "$chord" ] || continue
+    # Every segment but the last is a modifier, and there has to be one:
+    # `c = '...'` is a valid binding that takes the C key away from every app.
+    case "$chord" in
+      *-*) ;;
+      *) echo "$name: chord '$chord' has no modifier" >&2; fail=1; continue ;;
+    esac
+    bad=0
+    mods="${chord%-*}"
+    key="${chord##*-}"
+    IFS='-' read -r -a parts <<< "$mods"
+    for m in "${parts[@]}"; do
+      case "$m" in cmd|alt|ctrl|shift) ;; *) bad=1 ;; esac
+    done
+    case "$key" in ''|*[!a-z0-9]*) bad=1 ;; esac
+    [ "$bad" -eq 0 ] || { echo "$name: chord '$chord' is not a valid AeroSpace binding" >&2; fail=1; }
+
+    # Two capabilities wanting the same chord is a conflict neither can see
+    # from its own descriptor, and whichever sorts later would silently lose.
+    if printf '%s\n' "${seen_chords:-}" | grep -qx -- "$chord"; then
+      echo "$name: chord '$chord' is declared by more than one capability" >&2; fail=1
+    fi
+    seen_chords="${seen_chords:-}
+$chord"
+  done < <(printf '%s' "$d" | jq -r '(.keys // [])[].chord')
 done < <(DOT_ROOT="$REPO" "$REPO/bin/dot" capabilities --paths)
 
 # The palette must render without error.

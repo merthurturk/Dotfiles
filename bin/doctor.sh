@@ -166,6 +166,17 @@ if [ -n "$theme" ] && [ -x "$REPO/config/aerospace/bin/wallpaper" ]; then
   fi
 fi
 
+head_ "Keybindings"
+# A capability can declare its own chord, but nothing writes it to the config
+# on its behalf -- a `dot` command that rewrote the window manager's config as
+# a side effect of being asked a question would be a worse trade than this
+# check. So the drift is real, and this is what notices it.
+"$REPO/bin/dot" keys --check >/dev/null 2>&1; rc=$?
+if   [ "$rc" -eq 0 ]; then ok "declared chords are applied"
+elif [ "$rc" -eq 2 ]; then meh "aerospace.toml has no declared-keys block - see docs/capabilities.md"
+else meh "a capability declares a chord aerospace.toml doesn't have - run dot keys --apply"
+fi
+
 head_ "Reachable from the launcher"
 # Anything AeroSpace execs gets the [exec] PATH table from aerospace.toml, not
 # a login shell's PATH. Three separate bugs have come from assuming otherwise:

@@ -36,30 +36,6 @@ estimate from the same plausible reasoning.
 
 ---
 
-## The last thing registered twice
-
-### Let a capability declare its own keybinding
-
-A descriptor says everything about a capability except the one thing you press.
-`instances` puts it in the palette for free, but a *dedicated* chord still means
-hand-editing `aerospace.toml`, which is the only place left where adding
-something means touching a second file — the exact drift this repo removed
-everywhere else.
-
-The shape: an optional `key` in the descriptor, and a generator that owns a
-marked block in `aerospace.toml` the way `dot window pin` already owns one.
-`dot keys` keeps reading the file, so it stays the single source of truth; the
-descriptor just becomes one more thing that can write to it.
-
-The guard is the one `dot window pin` already proved: everything outside the
-block must be byte-identical, AeroSpace must still parse the result, roll back
-if not. Note that most capabilities should still declare no key at all — the
-leader exists precisely so they don't need one.
-
-*Small-to-medium, and it closes the last seam.*
-
----
-
 ## Getting it into other people's hands
 
 ### A short recording

@@ -5,6 +5,10 @@ source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 if [ "${1:-}" = "--describe" ]; then
   jq -n \
     --argjson choices "$(scenes_json | jq -c 'keys')" \
+    `# A scene's chord is part of the scene, in scenes.json, like its icon --` \
+    `# so it survives a pull, travels with \`dot scene edit\`, and needs no code.` \
+    --argjson keys "$(scenes_json | jq -c '
+      to_entries | map(select(.value.key)) | map({chord: .value.key, args: [.key]})')" \
     --argjson instances "$(
       { _scenes_lib; scenes_summary_tsv; } 2>/dev/null \
       | while IFS=$'\t' read -r name summary; do
@@ -24,6 +28,7 @@ if [ "${1:-}" = "--describe" ]; then
       destructive: false,
       verify: "dot scene list --json",
       undo: "dot scene close <workspace>",
+      keys: $keys,
       instances: $instances
     }'
   exit 0

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
 # dot scene edit [name] [--rename X] [--label X] [--icon X] [--badge X] [--ratio N]
+#                       [--key alt-ctrl-c] [--no-key]
 #
 # Changes what a scene is called and how its pill looks. With no arguments it
 # walks you through it from the launcher, which is the point: `dot scene save`
@@ -29,6 +30,8 @@ if [ "${1:-}" = "--describe" ]; then
            {name:"--rename", required:false}, {name:"--label", required:false},
            {name:"--icon", required:false}, {name:"--badge", required:false, choices:$badges},
            {name:"--ratio", required:false},
+           {name:"--key", required:false, note:"a chord that opens this scene, e.g. ctrl-alt-c"},
+           {name:"--no-key", required:false},
            {name:"--quit", required:false, note:"quit apps the scene leaves with no windows"},
            {name:"--no-quit", required:false}],
     destructive: false,
@@ -50,11 +53,13 @@ set_str()  { json_update "$SCENES_LOCAL" --arg n "$1" --arg k "$2" --arg     v "
 set_json() { json_update "$SCENES_LOCAL" --arg n "$1" --arg k "$2" --argjson v "$3" \
                '.[$n] = ((.[$n] // {}) + {($k): $v})'; }
 
-NAME=""; RENAME=""; LABEL=""; ICON=""; BADGE=""; RATIO=""; QUIT=""
+NAME=""; RENAME=""; LABEL=""; ICON=""; BADGE=""; RATIO=""; QUIT=""; KEY=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --quit)   QUIT=true;  shift ;;
     --no-quit) QUIT=false; shift ;;
+    --key)    KEY="${2:-}"; shift 2 ;;
+    --no-key) KEY="-";      shift ;;
     --rename) RENAME="${2:-}"; shift 2 ;;
     --label)  LABEL="${2:-}";  shift 2 ;;
     --icon)   ICON="${2:-}";   shift 2 ;;
@@ -84,11 +89,12 @@ printf '%s' "$DEFS" | jq -e --arg n "$NAME" 'has($n)' >/dev/null 2>&1 \
   || { echo "scene edit: no scene '$NAME'" >&2; exit 1; }
 
 # Guided: nothing was asked for on the command line, so ask.
-if [ -z "$RENAME$LABEL$ICON$BADGE$RATIO$QUIT" ]; then
+if [ -z "$RENAME$LABEL$ICON$BADGE$RATIO$QUIT$KEY" ]; then
   cur() { printf '%s' "$DEFS" | jq -r --arg n "$NAME" ".[\$n].$1 // \"\" | tostring"; }
   quit_now="$(printf '%s' "$DEFS" | jq -r --arg n "$NAME" 'if .[$n].quit then "yes" else "no" end')"
-  field="$(printf 'Icon\t%s\nColour\t%s\nLabel\t%s\nName\t%s\nSplit\t%s\nQuit apps on close\t%s\nDelete\tremove this scene\n' \
-             "$(cur icon)" "$(cur badge)" "$(cur label)" "$NAME" "$(cur ratio)" "$quit_now" \
+  key_now="$(cur key)"; key_now="$([ -n "$key_now" ] && keysym "$key_now" || printf 'none')"
+  field="$(printf 'Icon\t%s\nColour\t%s\nLabel\t%s\nName\t%s\nSplit\t%s\nShortcut\t%s\nQuit apps on close\t%s\nDelete\tremove this scene\n' \
+             "$(cur icon)" "$(cur badge)" "$(cur label)" "$NAME" "$(cur ratio)" "$key_now" "$quit_now" \
            | pick "Change what about $NAME?" scene-edit-field | cut -f1)"
   case "$field" in
     Icon)
@@ -108,6 +114,21 @@ if [ -z "$RENAME$LABEL$ICON$BADGE$RATIO$QUIT" ]; then
            | pick "How should $NAME split?" scene-ratio | cut -f2)"
       [ -n "$r" ] || exit 0
       RATIO="$r" ;;
+    Shortcut)
+      # Offer chords that are free rather than asking someone to type TOML and
+      # find out later that ⌥c was already "go to workspace C". ⌃⌥ is the one
+      # namespace this config leaves almost entirely alone.
+      bound="$("$DOT_ROOT/bin/dot" keys --json 2>/dev/null | jq -r '.[].chord')"
+      first="$(printf '%s' "$NAME" | cut -c1 | tr '[:upper:]' '[:lower:]')"
+      k="$( { printf 'none\tno shortcut for this scene\n'
+              for l in $first $(printf 'a b c d e f g h i j k l m n o p q r s t u v w x y z'); do
+                c="ctrl-alt-$l"
+                printf '%s\n' "$bound" | grep -qx -- "$c" && continue
+                printf '%s\t%s\n' "$(keysym "$c")" "$c"
+              done; } | awk -F'\t' '!seen[$2]++' \
+            | pick "Shortcut for $NAME?" scene-key | cut -f2)"
+      [ -n "$k" ] || exit 0
+      KEY="$([ "$k" = "no shortcut for this scene" ] && printf -- '-' || printf '%s' "$k")" ;;
     "Quit apps on close")
       q="$(printf 'Yes\tquit apps this scene leaves with no windows\nNo\tjust close the windows\n' \
            | pick "Quit apps when $NAME closes?" scene-quit | cut -f1)"
@@ -138,6 +159,21 @@ if [ -n "$BADGE" ]; then
 fi
 if [ -n "$QUIT" ]; then
   set_json "$NAME" quit "$QUIT"; changed="$changed quit-on-close"
+fi
+if [ -n "$KEY" ]; then
+  # null rather than a deleted key: the local file overrides the shipped one,
+  # and removing the field would let a shipped scene's chord back in.
+  if [ "$KEY" = "-" ]; then set_json "$NAME" key null
+  else set_str "$NAME" key "$KEY"
+  fi
+  # The descriptor is the source of truth for what chord this scene wants, but
+  # only aerospace.toml can actually bind it. Do it here rather than leaving a
+  # shortcut that exists in the data and nowhere your fingers can reach.
+  if ! out="$("$DOT_ROOT/bin/dot" keys --apply 2>&1)"; then
+    printf '%s\n' "$out" >&2
+    echo "scene edit: the shortcut was saved but not bound" >&2
+  fi
+  changed="$changed shortcut"
 fi
 if [ -n "$RATIO" ]; then
   jq -n --argjson v "$RATIO" 'if $v > 0 and $v < 1 then . else error("range") end' >/dev/null 2>&1 \

@@ -206,6 +206,19 @@ comes from the same capability descriptor the launcher reads — so `⌥⇧space
 and the palette describe "Open scene: chill" identically, because it is one
 string.
 
+When something does earn a dedicated chord, it asks for one in its own
+descriptor and `dot keys --apply` writes it into a block `aerospace.toml` ships
+empty. For a scene that is one field:
+
+```sh
+dot scene edit chill --key ctrl-alt-c
+```
+
+The config stays the only source of truth for what is bound — it just stopped
+being the only thing allowed to know about it. Before this, a chord was the one
+thing a capability could not declare for itself, and the last place in the repo
+where adding something meant editing a second file by hand.
+
 ## Pinned apps
 
 `dot window pin` says "this app lives here" while you are looking at the window

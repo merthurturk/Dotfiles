@@ -231,6 +231,12 @@ gaps.outer.right =      10
     # See: https://nikitabobko.github.io/AeroSpace/commands#mode
     alt-shift-semicolon = 'mode service'
 
+    # --- declared keys: managed by `dot keys --apply` -----------------------
+    # Chords capabilities asked for in their own --describe. Do not edit by
+    # hand: `dot keys --apply` rewrites this block whole from the descriptors.
+    ctrl-alt-c = 'exec-and-forget $HOME/.local/bin/dot scene open chill'
+    # --- end declared keys --------------------------------------------------
+
 # The leader mode: ⌥⇧space, then one letter.
 #
 # Thirty capabilities and five chords do not fit together -- most of what this
