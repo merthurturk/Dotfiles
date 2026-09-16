@@ -1,0 +1,219 @@
+#!/usr/bin/env bash
+#
+# dot keys [--pick] [--json]
+#
+# Every keybinding, read out of aerospace.toml. Nothing here is a list of keys
+# -- that is the point. A hand-written cheat sheet is wrong the first time you
+# rebind something, and this repo has already been bitten by a hint that drifted
+# from the binding it described.
+#
+# What each one *does* comes from the same place the launcher gets it: a
+# `dot` binding is described by its own capability descriptor, and an AeroSpace
+# built-in is described by the command itself, which reads well enough.
+
+set -u
+source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
+
+if [ "${1:-}" = "--describe" ]; then
+  jq -n --arg kb "$(keysym "$(keybinding 'dot keys')")" '{
+    id: "keys",
+    summary: "Show every keybinding",
+    args: [{name: "--pick", required: false, note: "show it in the launcher"},
+           {name: "--json", required: false}],
+    destructive: false,
+    instances: [{label: "Keyboard shortcuts", detail: $kb, args: ["--pick"]}]
+  }'
+  exit 0
+fi
+
+# "<mode>\t<chord>\t<command>" for every binding, in file order.
+bindings() {
+  awk '
+    /^\[mode\.[a-z]+\.binding\]/ { mode = $0; gsub(/^\[mode\.|\.binding\]$/, "", mode); next }
+    /^\[/ && !/^\[mode\./       { mode = "" }
+    mode == "" { next }
+    /^[[:space:]]*[a-z0-9-]+[[:space:]]*=/ {
+      line = $0
+      sub(/^[[:space:]]*/, "", line)
+      split(line, kv, "=")
+      chord = kv[1]; sub(/[[:space:]]+$/, "", chord)
+      cmd = substr(line, index(line, "=") + 1)
+      sub(/^[[:space:]]*/, "", cmd)
+      sub(/[[:space:]]*#.*$/, "", cmd)
+      gsub(/^\047|\047$/, "", cmd)
+      print mode "\t" chord "\t" cmd
+    }
+  ' "$AERO_CONFIG"
+}
+
+# A `dot` binding describes itself; ask the descriptor rather than inventing a
+# phrase that will disagree with the launcher.
+#
+# Instances first, exact arguments and all: `dot scene open chill` is "Open
+# scene: chill" in the launcher, and a cheat sheet that calls the same key
+# "Open a named scene on the first empty workspace (chill)" is a worse cheat
+# sheet. The bare summary is the fallback for bindings that match no instance.
+summaries() {
+  "$DOT_ROOT/bin/dot" capabilities --json 2>/dev/null | jq -r '
+    .[] | (.command) as $c
+    | ((.instances // [])[] | "\($c) \((.args // []) | join(" "))\t\(.label)"),
+      "\($c)\t\(.summary)"
+    | sub("[[:space:]]+\t"; "\t")'
+}
+
+# AeroSpace commands read like commands. These read like sentences.
+friendly() {   # <command>
+  case "$1" in
+    "focus left")   printf 'focus the window to the left' ;;
+    "focus right")  printf 'focus the window to the right' ;;
+    "focus up")     printf 'focus the window above' ;;
+    "focus down")   printf 'focus the window below' ;;
+    "move left"|"move right"|"move up"|"move down")
+                    printf 'move this window %s' "${1#move }" ;;
+    "join-with "*)  printf 'merge with the window %s' "${1#join-with }" ;;
+    balance-sizes)  printf 'even out the sizes' ;;
+    fullscreen)     printf 'fullscreen this window' ;;
+    "resize smart -"*) printf 'narrower' ;;
+    "resize smart +"*) printf 'wider' ;;
+    "layout tiles"*)     printf 'tile, or flip the orientation' ;;
+    "layout accordion"*) printf 'accordion, or flip the orientation' ;;
+    "layout floating tiling") printf 'float this window, or put it back' ;;
+    workspace-back-and-forth) printf 'back to the last workspace' ;;
+    "move-workspace-to-monitor"*) printf 'move this workspace to the next display' ;;
+    "mode service") printf 'service mode: the keys below, then it returns' ;;
+    reload-config)  printf 'reload the config' ;;
+    flatten-workspace-tree) printf 'reset this workspace layout' ;;
+    close-all-windows-but-current) printf 'close everything but this window' ;;
+    *)              printf '%s' "$1" ;;
+  esac
+}
+
+describe_cmd() {   # <command string> <summaries>
+  local cmd="$1" sums="$2" dot best=""
+  case "$cmd" in
+    *"exec-and-forget"*)
+      dot="${cmd#*\$HOME/.local/bin/}"          # "dot scene open chill"
+      # Longest matching capability command wins, so "dot scene open" beats
+      # "dot scene" and the arguments are left out of the match.
+      while IFS=$'\t' read -r c s; do
+        case "$dot " in
+          "$c "*) [ ${#c} -gt ${#best} ] && best="$c" && printf -v _found '%s' "$s" ;;
+        esac
+      done <<<"$sums"
+      if [ -n "$best" ]; then
+        printf '%s' "${_found}"
+        # Only a real argument is worth showing; a flag like --pick is how it
+        # is invoked, not what it does.
+        if [ "$dot" != "$best" ]; then
+          rest="${dot#"$best" }"
+          case "$rest" in -*) ;; *) printf ' (%s)' "$rest" ;; esac
+        fi
+      else
+        printf '%s' "$dot"
+      fi ;;
+    *) friendly "$cmd" ;;
+  esac
+}
+
+PICK=0; AS_JSON=0
+for a in "$@"; do
+  if [ "$a" = "--pick" ]; then PICK=1
+  elif [ "$a" = "--json" ]; then AS_JSON=1
+  else echo "usage: dot keys [--pick] [--json]" >&2; exit 1
+  fi
+done
+
+ROWS="$(bindings)"
+SUMS="$(summaries)"
+
+if [ "$AS_JSON" -eq 1 ]; then
+  printf '%s\n' "$ROWS" | while IFS=$'\t' read -r mode chord cmd; do
+    [ -n "${chord:-}" ] || continue
+    jq -n --arg mode "$mode" --arg chord "$chord" --arg keys "$(keysym "$chord")" \
+          --arg cmd "$cmd" --arg does "$(describe_cmd "$cmd" "$SUMS")" \
+          '{mode: $mode, chord: $chord, keys: $keys, command: $cmd, does: $does}'
+  done | jq -s '.'
+  exit 0
+fi
+
+# Which heading a binding belongs under. Grouping by what it acts on is the
+# only thing that makes a list of thirty chords memorable; file order is not.
+group_of() {   # <command>
+  case "$1" in
+    *"dot menu"*|*"dot keys"*|*"dot calendar"*|*"dot ai"*)  printf 'Launcher' ;;
+    *"dot scene"*)                                          printf 'Scenes' ;;
+    *"dot theme"*)                                          printf 'Themes' ;;
+    *"dot window"*|focus*|move\ *|resize*|balance*|fullscreen*|*join-with*) printf 'Windows' ;;
+    layout*)                                                printf 'Layout' ;;
+    workspace*|move-node-to-workspace*|move-workspace*)      printf 'Workspaces' ;;
+    mode*|*reload-config*|*flatten*|*close-all*)             printf 'Modes and repair' ;;
+    *)                                                      printf 'Other' ;;
+  esac
+}
+
+# Service-mode entries are TOML arrays that always end in 'mode main'; the
+# first element is the whole story.
+tidy_cmd() {   # <command>
+  local c="$1"
+  case "$c" in
+    \[*) c="${c#\[\'}"; c="${c%%\'*}" ;;
+  esac
+  printf '%s' "$c"
+}
+
+# Runs of workspace bindings are one idea, not thirty-one: collapse them.
+TABLE="$(
+  printf '%s\n' "$ROWS" | while IFS=$'\t' read -r mode chord cmd; do
+    [ -n "${chord:-}" ] || continue
+    # [[ ]] rather than case: a case pattern's closing ")" inside $( ) breaks
+    # bash 3.2's paren counting and the whole substitution mis-parses. See
+    # docs/macos.md -- this is the third time it has come up.
+    if [[ "$cmd" == "workspace "[0-9A-Z] ]]; then
+      [ -n "${g1:-}" ] && continue
+      g1=1
+      printf '%s\t%s\t%s\t%s\n' "Workspaces" "$mode" "⌥1…9  ⌥a…z" "go there"
+      continue
+    elif [[ "$cmd" == "move-node-to-workspace "[0-9A-Z] ]]; then
+      [ -n "${g2:-}" ] && continue
+      g2=1
+      printf '%s\t%s\t%s\t%s\n' "Workspaces" "$mode" "⌥⇧1…9  ⌥⇧a…z" "send this window there"
+      continue
+    fi
+    printf '%s\t%s\t%s\t%s\n' "$(group_of "$(tidy_cmd "$cmd")")" "$mode" "$(keysym "$chord")" \
+           "$(describe_cmd "$(tidy_cmd "$cmd")" "$SUMS")"
+  done
+)"
+
+# Widest chord, counted in characters -- printf pads by bytes, and every one of
+# these glyphs is three of them, so %-20s would stagger the column.
+WIDTH=0
+while IFS=$'\t' read -r _g _m keys _d; do
+  [ ${#keys} -gt "$WIDTH" ] && WIDTH=${#keys}
+done <<<"$TABLE"
+
+# In the launcher, one row per binding with its group as the dimmed detail --
+# which is also what makes it searchable: typing "scene" or "workspace" filters
+# to that group. Choosing a row does nothing; this is a thing to read.
+if [ "$PICK" -eq 1 ] && [ -x "$PICKER" ]; then
+  printf '%s\n' "$TABLE" \
+    | awk -F'\t' -v w="$WIDTH" '{
+        pad = w - length($3); s = ""
+        while (pad-- > 0) s = s " "
+        printf "%s%s  %s\t%s%s\n", $3, s, $4, $1, ($2 == "main" ? "" : " · " $2 " mode")
+      }' \
+    | PICKER_PROMPT="Keyboard shortcuts" PICKER_CONTEXT=keys pick "Keyboard shortcuts" keys \
+    >/dev/null
+  exit 0
+fi
+
+for group in Launcher Scenes Windows Workspaces Layout Themes "Modes and repair" Other; do
+  rows="$(printf '%s\n' "$TABLE" | awk -F'\t' -v g="$group" '$1 == g')"
+  [ -n "$rows" ] || continue
+  printf '\n%s\n' "$group"
+  printf '%s\n' "$rows" | while IFS=$'\t' read -r _g mode keys does; do
+    pad=""; i=${#keys}; while [ "$i" -lt "$WIDTH" ]; do pad="$pad "; i=$((i + 1)); done
+    [ "$mode" = "main" ] && tag="" || tag="   (${mode} mode)"
+    printf '  %s%s  %s%s\n' "$keys" "$pad" "$does" "$tag"
+  done
+done
+printf '\n'

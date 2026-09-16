@@ -271,6 +271,18 @@ helper owns the Calendars permission and publishes what is next into the state
 directory; the bar and the launcher only read files. It asks for access the
 first time it runs — `dot doctor` says so if it is still missing.
 
+## Every shortcut
+
+```sh
+dot keys              # grouped, with what each one does
+dot keys --json
+```
+
+Read out of `aerospace.toml`, never written down twice — a hand-written cheat
+sheet is wrong the first time you rebind something. What each key *does* comes
+from the same place the launcher gets it: a `dot` binding is described by its
+own capability descriptor, so `⌥⇧space` says "Open scene: chill" in both.
+
 ## The picker
 
 `config/aerospace/src/picker.swift` compiles to a standalone chooser —

@@ -181,6 +181,7 @@ sketchybar --add item front_app left \
 sketchybar --add item calevent right \
            --set calevent drawing=on label.drawing=off \
                  label.font="$FONT_REGULAR:13.0" \
+                 label.padding_left=0 \
                  label.padding_right=12 \
                  click_script="$HOME/.local/bin/dot calendar agenda --pick" \
            --add item clock right \
@@ -188,6 +189,7 @@ sketchybar --add item calevent right \
                  icon="󰅐" \
                  icon.color="$MAUVE" \
                  label.font="$FONT_BOLD:13.0" \
+                 label.padding_right=6 \
                  script="$PLUGIN_DIR/clock.sh" \
                  click_script="$HOME/.local/bin/dot calendar agenda --pick" \
            --subscribe clock system_woke \

@@ -49,6 +49,7 @@ keysym() {
   printf '%s' "$1" | sed -e 's/alt-/⌥/g'  -e 's/shift-/⇧/g' \
                          -e 's/ctrl-/⌃/g' -e 's/cmd-/⌘/g'   \
                          -e 's/enter/↩/'  -e 's/backspace/⌫/' \
+                         -e 's/tab$/⇥/' \
                          -e 's|backslash|\\|' -e 's/semicolon/;/' \
                          -e 's/slash/\//' -e 's/comma/,/' -e 's/minus/-/' \
                          -e 's/equal/=/'

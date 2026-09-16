@@ -49,7 +49,7 @@ if [ "${1:-}" = "--describe" ]; then
            {name: "--json", required: false}],
     destructive: false,
     instances: (if $have and $next != ""
-                then [{label: "Today", detail: (if $kb != "" then $kb + "   " + $next else $next end), args: ["--pick"]}]
+                then [{label: "Agenda for today", detail: (if $kb != "" then $kb + "   " + $next else $next end), args: ["--pick"]}]
                 else [] end)
   }'
   exit 0

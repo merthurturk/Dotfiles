@@ -52,7 +52,7 @@ if [ -s "$NEXT_FILE" ]; then
     # true should not be the part that gets cut.
     MAX=34
     [ ${#TITLE} -gt $MAX ] && TITLE="$(printf '%.*s' $((MAX - 1)) "$TITLE")…"
-    EVENT="→  $AT $TITLE"
+    EVENT="→ $AT $TITLE"
   fi
 fi
 
