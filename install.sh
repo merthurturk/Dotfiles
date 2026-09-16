@@ -52,14 +52,36 @@ done
 log "Linking dot into ~/.local/bin"
 mkdir -p "$HOME/.local/bin"
 ln -sfn "$DOTFILES/bin/dot" "$HOME/.local/bin/dot"
+# Write it, do not warn about it. ~/.local/bin is never on a stock macOS PATH
+# (/etc/paths has no such entry), so every single user hit this warning -- one
+# yellow line a third of the way up sixty lines of output -- and then found
+# that `dot doctor`, the command the readme tells you to run next, did not
+# exist. Homebrew's shellenv has the same problem: its installer prints the
+# line and does not write it either.
+PROFILE="$HOME/.zprofile"
+add_to_profile() {   # <line> <marker>
+  [ -f "$PROFILE" ] && grep -qF "$2" "$PROFILE" && return 0
+  printf '\n# added by dotfiles install.sh\n%s\n' "$1" >> "$PROFILE"
+  log "added to ~/.zprofile: $1"
+  PROFILE_CHANGED=1
+}
+PROFILE_CHANGED=0
+[ -x /opt/homebrew/bin/brew ] && add_to_profile 'eval "$(/opt/homebrew/bin/brew shellenv)"' 'brew shellenv'
+[ -x /usr/local/bin/brew ] && [ ! -x /opt/homebrew/bin/brew ] \
+  && add_to_profile 'eval "$(/usr/local/bin/brew shellenv)"' 'brew shellenv'
+add_to_profile 'export PATH="$HOME/.local/bin:$PATH"' '.local/bin'
 case ":$PATH:" in
   *":$HOME/.local/bin:"*) ;;
-  *) warn "$HOME/.local/bin is not on your PATH; add it so dot works from a shell." ;;
+  *) export PATH="$HOME/.local/bin:$PATH" ;;
 esac
 
 # --- Compiled helpers -----------------------------------------------------
 
-if command -v swiftc >/dev/null 2>&1; then
+# `swiftc -version`, not `command -v swiftc`: /usr/bin/swiftc is a Command Line
+# Tools shim that exists on every Mac whether or not the tools do, so
+# `command -v` is always true and the helpful else-branch below was dead code.
+# Running it is the only way to ask the real question.
+if swiftc -version >/dev/null 2>&1; then
   mkdir -p "$DOTFILES/config/aerospace/bin"
   for helper in picker wallpaper geometry; do
     log "Building $helper"
@@ -86,12 +108,17 @@ else
 fi
 
 # --- Theme ----------------------------------------------------------------
-# colors.sh and the Ghostty theme are symlinks into themes/<name>/, so a fresh
-# clone has to pick one before the bar can start.
-
-if [ ! -e "$HOME/.local/state/aerospace/theme" ]; then
-  log "Selecting the default theme"
-  DOT_ROOT="$DOTFILES" "$DOTFILES/libexec/dot/theme-set" opal-white >/dev/null
+# colors.sh and the Ghostty theme are symlinks into themes/<name>/. They are
+# NOT tracked -- tracking them committed an absolute /Users/<name>/ path and
+# made `dot theme set` dirty the working tree -- so a fresh clone has neither,
+# and they must be created here rather than only when no theme is recorded.
+if [ ! -e "$DOTFILES/config/sketchybar/colors.sh" ] \
+   || [ ! -e "$DOTFILES/config/ghostty/theme.conf" ] \
+   || [ ! -e "$HOME/.local/state/aerospace/theme" ]; then
+  THEME="$(cat "$HOME/.local/state/aerospace/theme" 2>/dev/null || echo opal-white)"
+  [ -d "$DOTFILES/themes/$THEME" ] || THEME=opal-white
+  log "Selecting the theme ($THEME)"
+  DOT_ROOT="$DOTFILES" "$DOTFILES/libexec/dot/theme-set" "$THEME" >/dev/null
 fi
 
 # --- System defaults ------------------------------------------------------
@@ -171,7 +198,12 @@ Run bin/doctor.sh afterwards; it verifies every one of them.
 
 Then check your work:
 
-    bin/doctor.sh
+    dot doctor
 
 ────────────────────────────────────────────────────────────────────────
 STEPS
+
+if [ "$PROFILE_CHANGED" -eq 1 ]; then
+  warn "$PROFILE changed. Start a new terminal, or run: exec zsh -l"
+  warn "Until you do, dot works only in this shell."
+fi

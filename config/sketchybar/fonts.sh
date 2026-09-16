@@ -18,7 +18,7 @@
 
 _font_cache="${XDG_STATE_HOME:-$HOME/.local/state}/aerospace/fonts"
 
-if [ -r "$_font_cache" ]; then
+if [ -s "$_font_cache" ]; then
   # shellcheck source=/dev/null
   . "$_font_cache"
 else
@@ -38,7 +38,11 @@ else
     printf 'export FONT_REGULAR=%s\n' "\"$_fr\""
     printf 'export FONT_MEDIUM=%s\n'  "\"$_fm\""
     printf 'export FONT_BOLD=%s\n'    "\"$_fb\""
-  } > "$_font_cache"
+  # Through a rename. sketchybarrc deletes this cache and re-probes on every
+  # reload, while the 5-second pill repaint is sourcing it -- a reader landing
+  # in a truncate-in-place window gets no font name at all, and sketchybar
+  # accepts an empty font string silently.
+  } > "$_font_cache.$$" && mv "$_font_cache.$$" "$_font_cache"
   export FONT_REGULAR="$_fr" FONT_MEDIUM="$_fm" FONT_BOLD="$_fb"
 fi
 

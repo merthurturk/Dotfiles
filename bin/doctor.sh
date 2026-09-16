@@ -51,7 +51,17 @@ font_present() {
 head_ "Services"
 pgrep -x sketchybar >/dev/null && ok "sketchybar running" || no "sketchybar not running - brew services start sketchybar"
 pgrep -x borders >/dev/null && ok "borders running" || no "borders not running - brew services start borders"
-pgrep -f "AeroSpace.app" >/dev/null && ok "AeroSpace running" || no "AeroSpace not running - open -a AeroSpace"
+if ! pgrep -f "AeroSpace.app" >/dev/null; then
+  no "AeroSpace not running - open -a AeroSpace"
+elif [ "$(aerospace list-windows --monitor all --count 2>/dev/null || echo 0)" -gt 0 ]; then
+  ok "AeroSpace running and managing windows"
+else
+  # Running but seeing nothing is what a missing Accessibility grant looks
+  # like: every command returns 0 and moves nothing. Checking the process
+  # table would call that healthy, which is the exact failure CLAUDE.md's
+  # "verify against the world" rule was written about.
+  no "AeroSpace sees no windows - System Settings > Privacy & Security > Accessibility > AeroSpace"
+fi
 if launchctl print "gui/$(id -u)/sh.dotfiles.aerospace-bridge" >/dev/null 2>&1; then
   ok "event bridge agent loaded"
 else
@@ -87,6 +97,27 @@ else
   # "+" button, so say exactly where to go.
   meh "calendar: no Calendars access yet - System Settings > Privacy & Security > Calendars, allow 'dot calendar'"
 fi
+
+for agent in sh.dotfiles.aerospace-bridge sh.dotfiles.calendar sh.dotfiles.theme-auto; do
+  if ! [ -f "$HOME/Library/LaunchAgents/$agent.plist" ]; then
+    case "$agent" in
+      *theme-auto) ok "$agent not installed (dot theme auto on)" ;;
+      *) no "$agent not installed - run install.sh" ;;
+    esac
+  elif ! launchctl print "gui/$(id -u)/$agent" >/dev/null 2>&1; then
+    no "$agent not loaded - launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/$agent.plist"
+  else
+    err="$STATE/${agent#sh.dotfiles.}.err"
+    err="${err/aerospace-bridge.err/bridge.err}"
+    # An agent that crash-loops keeps `launchctl print` happy every 30
+    # seconds, so the only evidence is the file nothing was reading.
+    if [ -s "$err" ]; then
+      meh "$agent is running but $err is not empty - tail it"
+    else
+      ok "$agent running"
+    fi
+  fi
+done
 
 head_ "Capabilities"
 if "$REPO/bin/check-capabilities.sh" >/dev/null 2>&1; then

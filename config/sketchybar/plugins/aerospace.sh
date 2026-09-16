@@ -33,6 +33,10 @@ fi
 # display. Restore each scene's declared ratio when the displays change; it
 # resizes hidden workspaces in place, so nothing visibly moves.
 if [ "$SENDER" = "display_change" ]; then
+  # Widths are cached per monitor because asking AppKit costs ~180ms. A
+  # resolution or scaling change makes every cached width wrong, and split-lib
+  # said "display_change clears the directory" while nothing did.
+  rm -rf "${XDG_STATE_HOME:-$HOME/.local/state}/aerospace/monitor-width"
   ( "$HOME/.local/bin/dot" window reflow >/dev/null 2>&1 & )
 fi
 

@@ -15,7 +15,10 @@ set -u
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 DOTFILES="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AGENT="sh.dotfiles.aerospace-bridge"
+# Every agent the repo installs -- install.sh does two and `dot theme auto`
+# installs the third itself. Naming one left the other two respawning every
+# thirty seconds against paths this script had just deleted.
+AGENTS="sh.dotfiles.aerospace-bridge sh.dotfiles.calendar sh.dotfiles.theme-auto"
 DRY=1
 [ "${1:-}" = "--yes" ] && DRY=0
 
@@ -29,8 +32,10 @@ run() {
 printf 'Services\n'
 run "brew services stop sketchybar >/dev/null 2>&1 || true"
 run "brew services stop borders >/dev/null 2>&1 || true"
-run "launchctl bootout gui/$(id -u)/$AGENT 2>/dev/null || true"
-run "rm -f \"$HOME/Library/LaunchAgents/$AGENT.plist\""
+for AGENT in $AGENTS; do
+  run "launchctl bootout gui/$(id -u)/$AGENT 2>/dev/null || true"
+  run "rm -f \"$HOME/Library/LaunchAgents/$AGENT.plist\""
+done
 run "osascript -e 'tell application \"AeroSpace\" to quit' 2>/dev/null || true"
 
 printf '\nSymlinks\n'

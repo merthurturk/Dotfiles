@@ -16,7 +16,7 @@
 LEDGER_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/aerospace"
 STATE_FILE="$LEDGER_DIR/scenes"        # "<workspace>\t<scene>\t<id,id>" per line
 PREV_FILE="$LEDGER_DIR/scenes-previous"
-: "${AEROSPACE:=/opt/homebrew/bin/aerospace}"
+: "${AEROSPACE:=$(command -v aerospace 2>/dev/null || echo /opt/homebrew/bin/aerospace)}"
 NL=$'\n'
 TAB=$'\t'
 

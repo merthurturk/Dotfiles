@@ -4,6 +4,8 @@ tap "nikitabobko/tap"       # aerospace
 
 # Window manager + status bar
 cask "aerospace"
+# Every `dot` descriptor is a jq program, and macOS ships none before 15.
+brew "jq"
 brew "sketchybar"
 brew "borders"              # window outlines -- this setup outlines, never shadows
 

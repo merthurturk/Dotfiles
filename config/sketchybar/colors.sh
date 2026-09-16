@@ -1,1 +1,0 @@
-/Users/merthurturk/.dotfiles/themes/opal-white/colors.sh

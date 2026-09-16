@@ -18,7 +18,6 @@ source "$DOT_ROOT/config/aerospace/logging.sh"
 # shellcheck source=/dev/null
 source "$DOT_ROOT/config/aerospace/split-lib.sh"
 
-GHOSTTY=/Applications/Ghostty.app/Contents/MacOS/ghostty
 PICKER="$DOT_ROOT/config/aerospace/bin/picker"
 
 if [ "${1:-}" = "--describe" ]; then

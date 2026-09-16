@@ -10,7 +10,14 @@
 # cannot see from here.
 # shellcheck disable=SC2034
 DOT_ROOT="${DOT_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
-AEROSPACE=/opt/homebrew/bin/aerospace
+# Resolved, not hardcoded: Intel Macs use /usr/local. A literal
+# /opt/homebrew here gave them a working bar and a `dot` that silently
+# half-failed on every command -- the worst possible split.
+AEROSPACE="$(command -v aerospace 2>/dev/null)"
+[ -n "$AEROSPACE" ] || for _p in /opt/homebrew/bin /usr/local/bin; do
+  [ -x "$_p/aerospace" ] && { AEROSPACE="$_p/aerospace"; break; }
+done
+: "${AEROSPACE:=aerospace}"
 # Ghostty's CLI lives inside the app bundle, and is on PATH only for
 # interactive shells -- its shell integration puts it there. Anything AeroSpace
 # execs gets the [exec] PATH table instead, which does not have it, so the

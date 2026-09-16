@@ -6,3 +6,10 @@ config/aerospace/bin/
 
 # Personal scene definitions, merged over the shipped examples.
 config/aerospace/scenes.local.json
+
+# The active theme, pointed at by a symlink `dot theme set` rewrites. Tracking
+# these committed an absolute /Users/<name>/ path into the repo and made the
+# most basic personalisation dirty the working tree for ever. install.sh and
+# `dot theme set` create them.
+config/sketchybar/colors.sh
+config/ghostty/theme.conf

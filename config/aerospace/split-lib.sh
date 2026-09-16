@@ -2,7 +2,8 @@
 #
 # Shared sizing helper for the split-* scripts.
 
-AEROSPACE=/opt/homebrew/bin/aerospace
+# Respect an already-resolved value; see libexec/dot/_lib.sh.
+: "${AEROSPACE:=$(command -v aerospace 2>/dev/null || echo /opt/homebrew/bin/aerospace)}"
 AEROSPACE_CONFIG="$HOME/.aerospace.toml"
 
 # Read an integer gap out of ~/.aerospace.toml, defaulting to 0.
@@ -42,7 +43,10 @@ _monitor_width_for() {
   cache="${XDG_STATE_HOME:-$HOME/.local/state}/aerospace/monitor-width"
   mkdir -p "$cache"
   local file="$cache/${mon//[^A-Za-z0-9]/_}"
-  if [ -r "$file" ]; then cat "$file"; return 0; fi
+  # -s, not -r: an osascript that returned nothing still created the file, and
+  # every later read then produced an empty width -- which makes tile_w
+  # negative and hands a nonsense target to `aerospace resize`.
+  if [ -s "$file" ]; then cat "$file"; return 0; fi
 
   local w
   w="$(osascript -l JavaScript -e '
@@ -56,7 +60,9 @@ function run(argv) {
   }
   return String(Math.round($.NSScreen.mainScreen.visibleFrame.size.width));
 }' "$mon")"
-  printf '%s' "$w" | tee "$file"
+  # Only cache a real answer, for the same reason.
+  [ -n "$w" ] && printf '%s' "$w" > "$file"
+  printf '%s' "$w"
 }
 
 # find_app_window <app-name> [workspace]

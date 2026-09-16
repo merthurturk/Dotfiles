@@ -15,7 +15,10 @@ source "$CONFIG_DIR/colors.sh"
 DOT="$HOME/.local/bin/dot"
 
 if [ "$BUTTON" != "right" ]; then
-  "$DOT" scene open chill
+  # The launcher, filtered -- not a scene name. `chill` is an entry in
+  # scenes.json that `dot scene edit --rename` and `dot scene delete` can both
+  # remove, and this button then failed silently.
+  "$DOT" menu --filter scene
   exit 0
 fi
 
