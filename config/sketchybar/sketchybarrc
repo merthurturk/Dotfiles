@@ -89,6 +89,14 @@ sketchybar --default "${default[@]}"
 
 ##### Items #####
 #
+# Every item is removed first, so a reload is a *rebuild*. sketchybar --reload
+# re-runs this file, and adding an item that already exists is a no-op -- which
+# means a widget whose file you deleted stayed in the bar until sketchybar
+# itself restarted. Now that adding a widget is "drop in a file", removing one
+# has to be "delete the file".
+sketchybar --remove '/.*/' >/dev/null 2>&1 || true
+
+#
 # Every item is a file. sketchybarrc keeps the bar, the defaults and the
 # geometry; what is *in* the bar is a directory, so adding a widget no longer
 # means editing this file -- and a widget of your own survives `git pull`.
