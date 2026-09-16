@@ -72,10 +72,30 @@ it looks fine and renders no Berkeley at all. Weight comes from the family name:
 Berkeley Mono is commercial and can't ship here, so `fonts.sh` probes for it and
 falls back to Hack.
 
-## The calendar chip
+## Date, time and what is next
 
-Shows what is next, and only when it is close — an empty afternoon should be an
-empty bar, not the word "nothing". Clicking it opens today in the picker.
+One label, in the status group:
+
+```
+󰅐 Wed 16 Sep  06:47                              nothing on
+󰃰 Wed 16 Sep  06:47  →  13:00 Relote Work Session later today
+󰃰 Wed 16 Sep  06:47  →  40m LTVplus Weekly       within the hour
+󰃰 Wed 16 Sep  06:47  →  3m Standup               imminent, icon amber
+󰃰 Wed 16 Sep  06:47  →  now Standup              running, icon green
+```
+
+This was two chips, and they were cut along the wrong seam: the clock carried
+the *date* while the calendar chip carried a *time*. Both are "when". Now the
+whole of "when" is one sentence and the status group keeps the machine's own
+state — volume, battery — beside it.
+
+The icon is the state. A clock when there is nothing ahead, a calendar when
+there is, and its colour says how soon. Only the **title** truncates, never the
+date or the time: the part that is always true should not be the part that gets
+cut. An all-day event is not "what is next" at a time, so it does not displace
+the clock.
+
+Clicking opens today in the picker.
 
 The events come from **EventKit**, the local store macOS Calendar syncs into.
 That is the whole reason for the route: a Google account added under *System

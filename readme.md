@@ -245,10 +245,16 @@ back rather than keeping a second copy. Before installing a rewrite it checks
 that everything outside the block is byte-identical, then that AeroSpace can
 still parse the result, and rolls back if not.
 
-## What's next
+## Date, time and what is next
 
-A calendar chip, left of the now-playing one, showing the next event when it is
-close — and today in the picker when you click it.
+The clock carries all three:
+
+```
+󰅐 Wed 16 Sep  06:47  →  13:00 Relote Work Session
+```
+
+The icon says how soon — a clock when nothing is ahead, a calendar going amber
+then green as it arrives. Clicking opens today in the picker.
 
 ```sh
 dot calendar agenda           # today, as text

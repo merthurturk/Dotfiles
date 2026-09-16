@@ -1,2 +1,51 @@
 #!/usr/bin/env bash
-sketchybar --set "$NAME" label="$(date '+%a %d %b  %H:%M')"
+#
+# Date, time, and what is next — one label.
+#
+# These were two chips, and they were cut along the wrong seam: the clock
+# carried the date while the calendar chip carried a time. Both are "when".
+# Now the whole of "when" is one sentence, and the status group keeps the
+# machine's own state (volume, battery) beside it.
+#
+# Reads what the resident calendar helper published; see
+# launchd/sh.dotfiles.calendar. Nothing is queried here, so this stays a
+# single sketchybar call on a 15-second timer.
+
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
+source "$CONFIG_DIR/colors.sh"
+
+NEXT_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/aerospace/next-event.tsv"
+WHEN="$(date '+%a %d %b  %H:%M')"
+
+# No event: a clock is a clock. The icon is the only thing that changes shape,
+# so the pill does not resize just because the day is empty.
+ICON="󰅐"; ICON_COLOR="$MAUVE"; LABEL="$WHEN"
+
+if [ -s "$NEXT_FILE" ]; then
+  IFS=$'\t' read -r START _END ALLDAY _CAL TITLE < "$NEXT_FILE"
+  if [ -n "${TITLE:-}" ] && [ "${ALLDAY:-1}" = "0" ]; then
+    NOW="$(date +%s)"
+    MINS=$(( (START - NOW + 59) / 60 ))
+
+    # Three states. "Starts in four minutes" and "you are already late" want
+    # different colours far more than they want different words.
+    if [ "$NOW" -ge "$START" ]; then
+      AT="now";            ICON="󰃰"; ICON_COLOR="$GREEN"
+    elif [ "$MINS" -le 5 ]; then
+      AT="${MINS}m";       ICON="󰃰"; ICON_COLOR="$PEACH"
+    elif [ "$MINS" -lt 60 ]; then
+      AT="${MINS}m";       ICON="󰃰"; ICON_COLOR="$BLUE"
+    else
+      AT="$(date -r "$START" '+%H:%M')"; ICON="󰃰"; ICON_COLOR="$BLUE"
+    fi
+
+    # Truncate the title, never the date or the time: the part that is always
+    # true should not be the part that gets cut.
+    MAX=34
+    [ ${#TITLE} -gt $MAX ] && TITLE="$(printf '%.*s' $((MAX - 1)) "$TITLE")…"
+    LABEL="$WHEN  →  $AT $TITLE"
+  fi
+fi
+
+sketchybar --set "$NAME" icon="$ICON" icon.color="$ICON_COLOR" label="$LABEL"
