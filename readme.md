@@ -256,9 +256,10 @@ dot calendar agenda --json
 ```
 
 Events come from EventKit, so **add Google under *System Settings > Internet
-Accounts*** and they appear with no OAuth and no secret in this repo. The helper
-needs Calendars access once: *Privacy & Security > Calendars*, set **dot
-calendar** to Full Access. `dot doctor` says so if it is missing.
+Accounts*** and they appear with no OAuth and no secret in this repo. A resident
+helper owns the Calendars permission and publishes what is next into the state
+directory; the bar and the launcher only read files. It asks for access the
+first time it runs — `dot doctor` says so if it is still missing.
 
 ## The picker
 

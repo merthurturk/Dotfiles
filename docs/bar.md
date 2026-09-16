@@ -89,18 +89,35 @@ date ≥ …` takes **five seconds** on this machine; EventKit answers in 40ms o
 local database. The music chip can afford a 130ms AppleScript round trip once
 every five seconds, and this could not.
 
-### Why the helper is a .app
+### Why it is an agent, and why the helper is a .app
 
-`config/aerospace/bin/DotCalendar.app` is a bundle rather than a bare binary
-like the picker and the geometry helper, for one reason: reading Calendars
-needs a TCC grant, and **the Calendars pane in System Settings has no "+"
-button**. An app only appears in that list once it has asked. A bundle gives it
-an identity of its own — listed as *dot calendar*, which is recognisable — instead
-of inheriting whatever process happened to launch it, which would mean granting
-SketchyBar access to your calendar and getting a different answer from the
-command line.
+Both come from the same fact: **TCC attributes a permission to the process
+*responsible* for launching one.** The helper run by SketchyBar is asking with
+SketchyBar's grant; the same binary run from Ghostty is asking with Ghostty's.
+Three callers, three identities, three different answers — and a `writeOnly`
+grant on one of them looks exactly like success until every read comes back
+empty.
 
-Two things learned building it, both of which cost time:
+So the helper does not get run by the bar at all. `launchd/sh.dotfiles.calendar`
+runs it resident, where it is its own responsible process, and it publishes two
+files into `~/.local/state/aerospace/`:
+
+| | |
+|---|---|
+| `next-event.tsv` | one row, or empty. What the chip draws |
+| `agenda.tsv` | today. What `dot calendar agenda` reads |
+
+The bar and the launcher only read those, so the repaint path forks nothing and
+neither needs a permission of its own. It waits on `EKEventStoreChanged`, so an
+edit in Calendar shows up at once, with a 60-second timer as the backstop —
+events become "now" through the passage of time, which fires no notification.
+
+`DotCalendar.app` is a bundle rather than a bare binary like the picker and the
+geometry helper because **the Calendars pane in System Settings has no "+"
+button**: an app only appears there once it has asked. The bundle gives it a
+name in that list you can recognise, *dot calendar*.
+
+Three things learned building it, all of which cost time:
 
 `authorizationStatus` and `requestFullAccessToEvents` disagree. A process can
 read a status of `fullAccess` and still get `false` back from a request, and
@@ -111,6 +128,11 @@ ask when it is `notDetermined`.
 `writeOnly`**. An "Add Events Only" grant looks like success to anyone who
 assumes the last constant is the best one, and then every read comes back
 empty.
+
+macOS will not prompt when there are no calendar accounts configured at all —
+it returns `granted=false` with no error and records nothing. Add the account
+first, then ask. The first attempt here looked like a permission the user had
+refused, and was actually a question never put to them.
 
 ## y_offset belongs with the font
 

@@ -10,8 +10,17 @@
 // pathology; EventKit answers the same question in milliseconds off a local
 // database.
 //
+//   calendar watch                       resident; publishes to state files
 //   calendar next [--within <minutes>]   the next event, if one is close
-//   calendar agenda [--json]             everything left today
+//   calendar agenda                      everything today
+//
+// `watch` is how this is actually used. TCC attributes a permission to the
+// process *responsible* for launching one, so the helper run by SketchyBar
+// would be asking with SketchyBar's grant, and the same binary run from a
+// terminal would be asking with the terminal's -- three identities, three
+// grants, three different answers. A launchd agent is its own responsible
+// process, so the grant belongs to this bundle and nothing else needs one.
+// The bar and the launcher then read files and do no work at all.
 //
 // Output is tab-separated: <epoch start> <epoch end> <all-day> <calendar> <title>
 // `next` prints one row or nothing at all, which is what lets the bar chip say
@@ -62,22 +71,28 @@ func flag(_ name: String) -> String? {
     return args[i + 1]
 }
 
-// Today, from now until midnight. An event that started an hour ago and is
-// still running is still what you are in, so the window starts at the top of
-// today and the caller decides what "next" means.
-let startOfDay = cal.startOfDay(for: now)
-let endOfDay = cal.date(byAdding: .day, value: 1, to: startOfDay)!
-let predicate = store.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: nil)
+// Today, midnight to midnight. An event that started an hour ago and is still
+// running is still what you are in, so the window starts at the top of today
+// and the caller decides what "next" means.
+//
+// Recomputed on each call rather than captured once: `watch` outlives a day.
+@Sendable func todaysEvents() -> [EKEvent] {
+    let today = Date()
+    let startOfDay = cal.startOfDay(for: today)
+    let endOfDay = cal.date(byAdding: .day, value: 1, to: startOfDay)!
+    let predicate = store.predicateForEvents(withStart: startOfDay, end: endOfDay,
+                                             calendars: nil)
+    // Declined invitations are not your day.
+    return store.events(matching: predicate)
+        .filter { ev in
+            guard let me = ev.attendees?.first(where: { $0.isCurrentUser }) else { return true }
+            return me.participantStatus != .declined
+        }
+        .sorted { ($0.startDate ?? .distantPast) < ($1.startDate ?? .distantPast) }
+}
+let events = todaysEvents()
 
-// Declined invitations are not your day.
-let events = store.events(matching: predicate)
-    .filter { ev in
-        guard let me = ev.attendees?.first(where: { $0.isCurrentUser }) else { return true }
-        return me.participantStatus != .declined
-    }
-    .sorted { ($0.startDate ?? .distantPast) < ($1.startDate ?? .distantPast) }
-
-func row(_ ev: EKEvent) -> String {
+@Sendable func row(_ ev: EKEvent) -> String {
     let title = (ev.title ?? "(no title)").replacingOccurrences(of: "\t", with: " ")
     let name = (ev.calendar?.title ?? "").replacingOccurrences(of: "\t", with: " ")
     return [String(Int(ev.startDate.timeIntervalSince1970)),
@@ -85,12 +100,51 @@ func row(_ ev: EKEvent) -> String {
             ev.isAllDay ? "1" : "0", name, title].joined(separator: "\t")
 }
 
+// Where `watch` publishes. The bar reads the first of these on a timer and
+// forks nothing; `dot calendar agenda` reads the second.
+let stateDir = (ProcessInfo.processInfo.environment["XDG_STATE_HOME"]
+                ?? NSHomeDirectory() + "/.local/state") + "/aerospace"
+
+@Sendable func publish(_ name: String, _ text: String) {
+    try? FileManager.default.createDirectory(atPath: stateDir,
+                                             withIntermediateDirectories: true)
+    let path = stateDir + "/" + name
+    let tmp = path + ".tmp"
+    // Through a rename, so a reader never sees half a file.
+    try? text.write(toFile: tmp, atomically: false, encoding: .utf8)
+    _ = try? FileManager.default.replaceItemAt(URL(fileURLWithPath: path),
+                                               withItemAt: URL(fileURLWithPath: tmp))
+}
+
+@Sendable func snapshot() {
+    let evs = todaysEvents()
+    publish("agenda.tsv", evs.map(row).joined(separator: "\n") + (evs.isEmpty ? "" : "\n"))
+    // The rest of today, not a few hours of it. "What is next" at 06:30 is the
+    // 13:00 meeting; the chip already shows a clock time rather than a
+    // countdown once something is more than an hour away, so a distant event
+    // reads as "13:00 · Work Session" and takes no more room than "25m".
+    let now = Date()
+    let horizon = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now))!
+    let current = evs.first { !$0.isAllDay && $0.startDate <= now && ($0.endDate ?? now) > now }
+    let upcoming = evs.first { !$0.isAllDay && $0.startDate > now && $0.startDate <= horizon }
+    publish("next-event.tsv", (current ?? upcoming).map { row($0) + "\n" } ?? "")
+}
+
 switch cmd {
+case "watch":
+    snapshot()
+    // EventKit says when something changed, so an edit in Calendar shows up
+    // immediately rather than on the next tick. The timer is the backstop:
+    // events become "now" with the passage of time, which fires no
+    // notification at all.
+    NotificationCenter.default.addObserver(forName: .EKEventStoreChanged,
+                                           object: store, queue: .main) { _ in snapshot() }
+    Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in snapshot() }
+    RunLoop.main.run()
 case "next":
-    // How far ahead to care. Beyond this the bar says nothing rather than
-    // showing you a meeting you cannot do anything about yet.
-    let within = Double(flag("--within") ?? "") ?? 240
-    let horizon = now.addingTimeInterval(within * 60)
+    // Defaults to the rest of today; --within narrows it.
+    let horizon = flag("--within").flatMap(Double.init).map { now.addingTimeInterval($0 * 60) }
+        ?? cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now))!
     // Something you are in the middle of beats something that has not started.
     let current = events.first { !$0.isAllDay && $0.startDate <= now && ($0.endDate ?? now) > now }
     let upcoming = events.first { !$0.isAllDay && $0.startDate > now && $0.startDate <= horizon }

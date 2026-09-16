@@ -74,16 +74,18 @@ head_ "Built artefacts"
   && ok "geometry helper built" \
   || no "geometry helper not built - swiftc -O -o config/aerospace/bin/geometry config/aerospace/src/geometry.swift -framework AppKit"
 
-CAL="$REPO/config/aerospace/bin/DotCalendar.app/Contents/MacOS/DotCalendar"
-if [ ! -x "$CAL" ]; then
+if ! [ -x "$REPO/config/aerospace/bin/DotCalendar.app/Contents/MacOS/DotCalendar" ]; then
   no "calendar helper not built - run install.sh"
-elif "$CAL" agenda >/dev/null 2>&1; then
-  ok "calendar helper can read your calendars"
+elif ! launchctl print "gui/$(id -u)/sh.dotfiles.calendar" >/dev/null 2>&1; then
+  no "calendar helper not running - launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/sh.dotfiles.calendar.plist"
+elif [ -f "$STATE/agenda.tsv" ]; then
+  n="$(grep -c . "$STATE/agenda.tsv" 2>/dev/null || echo 0)"
+  ok "calendar helper is publishing ($n event(s) today)"
 else
   # Not a failure: the bar simply does not draw the chip. But it is the one
   # setup step that cannot be done from here, and the Calendars pane has no
   # "+" button, so say exactly where to go.
-  meh "calendar: no Calendars access - System Settings > Privacy & Security > Calendars, set 'dot calendar' to Full Access"
+  meh "calendar: no Calendars access yet - System Settings > Privacy & Security > Calendars, allow 'dot calendar'"
 fi
 
 head_ "Capabilities"

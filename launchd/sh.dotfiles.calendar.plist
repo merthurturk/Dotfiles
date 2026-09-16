@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>sh.dotfiles.calendar</string>
+
+    <!-- The binary inside the .app, so the Calendars permission belongs to
+         this bundle. TCC attributes a grant to the process responsible for
+         launching one, so the same binary run by SketchyBar would be asking
+         with SketchyBar's grant and from a terminal with the terminal's.
+         Under launchd it is its own responsible process, and one grant does. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>__HOME__/.config/aerospace/bin/DotCalendar.app/Contents/MacOS/DotCalendar</string>
+        <string>watch</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Resident: it waits on EventKit change notifications, so an edit in
+         Calendar shows up in the bar at once rather than on the next tick. -->
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+
+    <key>StandardErrorPath</key>
+    <string>__HOME__/.local/state/aerospace/calendar.err</string>
+</dict>
+</plist>

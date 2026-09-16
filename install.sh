@@ -115,6 +115,20 @@ launchctl bootout "gui/$(id -u)/$AGENT" 2>/dev/null || true
 launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/$AGENT.plist" 2>/dev/null \
   || warn "Could not load $AGENT - check with: launchctl print gui/$(id -u)/$AGENT"
 
+# --- Calendar ---------------------------------------------------------------
+# Resident so the Calendars permission belongs to one process with one identity;
+# it publishes what is next and today into the state directory, and the bar and
+# the launcher only read files.
+log "Installing the calendar helper"
+AGENT="sh.dotfiles.calendar"
+sed "s|__HOME__|$HOME|g" "$DOTFILES/launchd/$AGENT.plist" \
+  > "$HOME/Library/LaunchAgents/$AGENT.plist"
+launchctl bootout "gui/$(id -u)/$AGENT" 2>/dev/null || true
+launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/$AGENT.plist" 2>/dev/null \
+  || warn "Could not load $AGENT - check with: launchctl print gui/$(id -u)/$AGENT"
+warn "Calendar access is asked for once, the first time the helper runs."
+warn "If the chip stays hidden: System Settings > Privacy & Security > Calendars."
+
 # --- Git hooks ------------------------------------------------------------
 
 if [ -d "$DOTFILES/.git" ]; then

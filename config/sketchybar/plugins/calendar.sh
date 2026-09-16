@@ -20,20 +20,16 @@ if [ "$SENDER" = "mouse.entered" ]; then
   exit 0
 fi
 
-CAL="$HOME/.config/aerospace/bin/DotCalendar.app/Contents/MacOS/DotCalendar"
-NEXT_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/aerospace/next-event"
+# What the resident helper published. Nothing is run here: the agent owns the
+# Calendars permission and writes these files, so the repaint path forks
+# nothing and needs no permission of its own. See launchd/sh.dotfiles.calendar.
+NEXT_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/aerospace/next-event.tsv"
 
-hide() { : > "$NEXT_FILE" 2>/dev/null; sketchybar --set "$NAME" drawing=off; exit 0; }
+hide() { sketchybar --set "$NAME" drawing=off; exit 0; }
 
-[ -x "$CAL" ] || hide
-mkdir -p "$(dirname "$NEXT_FILE")"
-
-# <start epoch>\t<end epoch>\t<all-day>\t<calendar>\t<title>, or nothing at all.
-ROW="$("$CAL" next --within 240 2>/dev/null)"
-[ -n "$ROW" ] || hide
-
-IFS=$'\t' read -r START _END _ALLDAY _CAL TITLE <<<"$ROW"
-[ -n "${TITLE:-}" ] || hide
+[ -s "$NEXT_FILE" ] || hide
+IFS=$'\t' read -r START _END ALLDAY _CAL TITLE < "$NEXT_FILE"
+[ -n "${TITLE:-}" ] && [ "${ALLDAY:-1}" = "0" ] || hide
 
 NOW="$(date +%s)"
 MINS=$(( (START - NOW + 59) / 60 ))
@@ -48,10 +44,6 @@ else
   if [ "$MINS" -ge 60 ]; then WHEN="$(date -r "$START" '+%H:%M')"; else WHEN="${MINS}m"; fi
   ICON_COLOR="$BLUE"; FG="$SUBTEXT"
 fi
-
-# Remaining minutes, for anything that wants the same answer without paying for
-# the helper again -- the launcher reads this.
-printf '%s\t%s\t%s\n' "$START" "$WHEN" "$TITLE" > "$NEXT_FILE"
 
 MAX=26
 LABEL="$WHEN · $TITLE"

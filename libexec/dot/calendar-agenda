@@ -14,16 +14,23 @@
 set -u
 source "$(dirname "${BASH_SOURCE[0]}")/_lib.sh"
 
-CAL="$DOT_ROOT/config/aerospace/bin/DotCalendar.app/Contents/MacOS/DotCalendar"
-NEXT_FILE="$STATE_DIR/next-event"
+# Both files are published by the resident helper -- see
+# launchd/sh.dotfiles.calendar. Nothing here runs it: it owns the Calendars
+# permission, and asking it again from a shell would be asking with the
+# shell's grant instead, which is a different and usually absent one.
+AGENDA_FILE="$STATE_DIR/agenda.tsv"
+NEXT_FILE="$STATE_DIR/next-event.tsv"
 
 if [ "${1:-}" = "--describe" ]; then
   # The detail comes from what the bar already published, so opening the
   # palette costs nothing -- the helper is not run here.
   next=""
-  [ -r "$NEXT_FILE" ] && IFS=$'\t' read -r _ when title < "$NEXT_FILE" \
-    && [ -n "${title:-}" ] && next="$when · $title"
-  jq -n --arg next "${next:-}" --argjson have "$([ -x "$CAL" ] && echo true || echo false)" '{
+  if [ -s "$NEXT_FILE" ]; then
+    IFS=$'\t' read -r start _e _a _c title < "$NEXT_FILE"
+    [ -n "${title:-}" ] && next="$(date -r "$start" '+%H:%M') · $title"
+  fi
+  jq -n --arg next "${next:-}" \
+        --argjson have "$([ -s "$AGENDA_FILE" ] && echo true || echo false)" '{
     id: "calendar.agenda",
     summary: "Show what is on today",
     args: [{name: "--pick", required: false, note: "show it in the launcher"},
@@ -45,19 +52,15 @@ for a in "$@"; do
   esac
 done
 
-[ -x "$CAL" ] || { echo "dot: calendar helper not built - run install.sh" >&2; exit 1; }
-
-ROWS="$("$CAL" agenda 2>/dev/null)" || true
-if [ -z "$ROWS" ]; then
-  # Distinguish "nothing on" from "cannot see your calendar", because the fix
-  # for one of those is a permission and the fix for the other is a holiday.
-  if ! "$CAL" agenda >/dev/null 2>&1; then
-    echo "calendar: no access to Calendars - grant Full Access (dot doctor says where)" >&2
-    exit 1
-  fi
-  echo "nothing left today"
-  exit 0
+# Distinguish "nothing on" from "cannot see your calendar": the file not
+# existing at all means the helper has never run or cannot read, and the fix
+# for that is a permission rather than a holiday.
+if [ ! -f "$AGENDA_FILE" ]; then
+  echo "calendar: the helper has not published anything - dot doctor says why" >&2
+  exit 1
 fi
+ROWS="$(cat "$AGENDA_FILE")"
+[ -n "$ROWS" ] || { echo "nothing on today"; exit 0; }
 
 if [ "$AS_JSON" -eq 1 ]; then
   printf '%s\n' "$ROWS" | jq -R -s 'split("\n") | map(select(length>0) | split("\t"))
