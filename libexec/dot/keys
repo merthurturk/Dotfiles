@@ -81,6 +81,8 @@ friendly() {   # <command>
     workspace-back-and-forth) printf 'back to the last workspace' ;;
     "move-workspace-to-monitor"*) printf 'move this workspace to the next display' ;;
     "mode service") printf 'service mode: the keys below, then it returns' ;;
+    "mode dot")     printf 'the leader: then one letter, below' ;;
+    "mode main")    printf 'back out' ;;
     reload-config)  printf 'reload the config' ;;
     flatten-workspace-tree) printf 'reset this workspace layout' ;;
     close-all-windows-but-current) printf 'close everything but this window' ;;
@@ -91,6 +93,10 @@ friendly() {   # <command>
 describe_cmd() {   # <command string> <summaries>
   local cmd="$1" sums="$2" dot best=""
   case "$cmd" in
+    *"dot menu --filter "*)
+      # A leader letter. What it opens is the filter, not "the palette".
+      f="${cmd##*--filter }"; printf '%s' "${f}s"
+      return ;;
     *"exec-and-forget"*)
       dot="${cmd#*\$HOME/.local/bin/}"          # "dot scene open chill"
       # Longest matching capability command wins, so "dot scene open" beats
@@ -138,7 +144,8 @@ fi
 
 # Which heading a binding belongs under. Grouping by what it acts on is the
 # only thing that makes a list of thirty chords memorable; file order is not.
-group_of() {   # <command>
+group_of() {   # <command> <mode>
+  [ "${2:-main}" = "dot" ] && { printf 'Leader  ⌥⇧space then…'; return; }
   case "$1" in
     *"dot menu"*|*"dot keys"*|*"dot calendar"*|*"dot ai"*)  printf 'Launcher' ;;
     *"dot scene"*)                                          printf 'Scenes' ;;
@@ -179,7 +186,7 @@ TABLE="$(
       printf '%s\t%s\t%s\t%s\n' "Workspaces" "$mode" "⌥⇧1…9  ⌥⇧a…z" "send this window there"
       continue
     fi
-    printf '%s\t%s\t%s\t%s\n' "$(group_of "$(tidy_cmd "$cmd")")" "$mode" "$(keysym "$chord")" \
+    printf '%s\t%s\t%s\t%s\n' "$(group_of "$(tidy_cmd "$cmd")" "$mode")" "$mode" "$(keysym "$chord")" \
            "$(describe_cmd "$(tidy_cmd "$cmd")" "$SUMS")"
   done
 )"
@@ -206,13 +213,13 @@ if [ "$PICK" -eq 1 ] && [ -x "$PICKER" ]; then
   exit 0
 fi
 
-for group in Launcher Scenes Windows Workspaces Layout Themes "Modes and repair" Other; do
+for group in Launcher "Leader  ⌥⇧space then…" Scenes Windows Workspaces Layout Themes "Modes and repair" Other; do
   rows="$(printf '%s\n' "$TABLE" | awk -F'\t' -v g="$group" '$1 == g')"
   [ -n "$rows" ] || continue
   printf '\n%s\n' "$group"
   printf '%s\n' "$rows" | while IFS=$'\t' read -r _g mode keys does; do
     pad=""; i=${#keys}; while [ "$i" -lt "$WIDTH" ]; do pad="$pad "; i=$((i + 1)); done
-    [ "$mode" = "main" ] && tag="" || tag="   (${mode} mode)"
+    if [ "$mode" = "main" ] || [ "$mode" = "dot" ]; then tag=""; else tag="   (${mode} mode)"; fi
     printf '  %s%s  %s%s\n' "$keys" "$pad" "$does" "$tag"
   done
 done

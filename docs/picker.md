@@ -7,6 +7,15 @@ A standalone AppKit chooser: auto-focused search field, fuzzy filter, arrows,
 enter, esc. Styled to match the bar — same palette, same Berkeley Mono, 16pt
 outer radius with concentric 8pt rows.
 
+## PICKER_QUERY
+
+Pre-fills the search field, filters immediately, and selects the text so the
+first keystroke replaces it — a starting point rather than something to delete.
+
+It is what makes the leader key cheap: `⌥⇧space s` is `dot menu --filter scene`,
+which is this same palette already narrowed. No second list to build, and none
+to keep in step with the first.
+
 ## It reads the theme
 
 The palette is **not** compiled in. At launch the picker parses

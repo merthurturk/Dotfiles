@@ -10,7 +10,9 @@ source "$DOT_ROOT/config/aerospace/logging.sh"
 
 if [ "${1:-}" = "--describe" ]; then
   # Deliberately no instances: the menu doesn't list itself.
-  jq -n '{id:"menu", summary:"Open the command palette", args:[], destructive:false}'
+  jq -n '{id:"menu", summary:"Open the command palette",
+          args:[{name:"--filter", required:false, note:"pre-fill the search"}],
+          destructive:false}'
   exit 0
 fi
 
@@ -36,6 +38,12 @@ export DOT_ORIG_WS DOT_ORIG_WID
       ([$c.command] + ((.args // []) | map(tostring)) | join(" "))
     ] | join("\t")' > "$MENU"
 
+# --filter pre-fills the search box. The leader key uses it: ⌥⇧space then "s"
+# is this palette already narrowed to scenes, rather than a second list to
+# build and keep in step with this one.
+FILTER=""
+if [ "${1:-}" = "--filter" ]; then FILTER="${2:-}"; shift 2; fi
+
 if [ "${1:-}" = "--dry-run" ]; then
   awk -F'\t' '{ printf "%-34s %-28s %s\n", $1, $2, $3 }' "$MENU"
   exit 0
@@ -44,7 +52,8 @@ fi
 [ -x "$PICKER" ] || { echo "menu: picker not built - run install.sh" >&2; exit 1; }
 
 CHOICE="$(cut -f1,2 "$MENU" \
-  | PICKER_PROMPT="What do you want to do?" PICKER_CONTEXT=menu "$PICKER")"
+  | PICKER_PROMPT="What do you want to do?" PICKER_CONTEXT=menu \
+    PICKER_QUERY="$FILTER" "$PICKER")"
 [ -z "$CHOICE" ] && exit 0
 
 CMD="$(awk -F'\t' -v c="$CHOICE" '$1 == c { print $3; exit }' "$MENU")"

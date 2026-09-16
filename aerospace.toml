@@ -147,11 +147,9 @@ gaps.outer.right =      10
     # Command palette: every action in one place, with its keybinding shown.
     alt-space = 'exec-and-forget $HOME/.local/bin/dot menu'
 
-    # Today's agenda: world clocks, and every call one keystroke from joining.
-    ctrl-alt-c = 'exec-and-forget $HOME/.local/bin/dot calendar agenda --pick'
-
-    # Open a named window layout on an empty workspace.
-    alt-shift-space = 'exec-and-forget $HOME/.local/bin/dot scene open chill'
+    # The leader. One chord to remember, then a letter for the part of the
+    # setup you want -- see [mode.dot.binding] at the end of this file.
+    alt-shift-space = 'mode dot'
     # Close every window on the focused workspace, but only if a scene opened it.
     alt-shift-backspace = 'exec-and-forget $HOME/.local/bin/dot scene close'
 
@@ -232,6 +230,26 @@ gaps.outer.right =      10
 
     # See: https://nikitabobko.github.io/AeroSpace/commands#mode
     alt-shift-semicolon = 'mode service'
+
+# The leader mode: ⌥⇧space, then one letter.
+#
+# Thirty capabilities and five chords do not fit together -- most of what this
+# setup can do was reachable only through the palette. Rather than inventing
+# unrelated combinations for each, one chord opens a mode and a mnemonic letter
+# picks the part of the launcher you meant. Every future capability gets a key
+# for free, because the letters open the palette filtered rather than naming
+# commands.
+#
+# Every binding ends in 'mode main', so the mode is always one action long. The
+# bar shows DOT while it is active.
+[mode.dot.binding]
+    s = ['exec-and-forget $HOME/.local/bin/dot menu --filter scene', 'mode main']
+    w = ['exec-and-forget $HOME/.local/bin/dot menu --filter window', 'mode main']
+    t = ['exec-and-forget $HOME/.local/bin/dot menu --filter theme', 'mode main']
+    c = ['exec-and-forget $HOME/.local/bin/dot calendar agenda --pick', 'mode main']
+    k = ['exec-and-forget $HOME/.local/bin/dot keys --pick', 'mode main']
+    space = ['exec-and-forget $HOME/.local/bin/dot menu', 'mode main']
+    esc = 'mode main'
 
 # 'service' binding mode declaration.
 # See: https://nikitabobko.github.io/AeroSpace/guide#binding-modes

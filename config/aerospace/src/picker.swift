@@ -104,6 +104,12 @@ let inputMode = ProcessInfo.processInfo.environment["PICKER_MODE"] == "input"
 // Optional multi-line text shown above the field, e.g. a plan awaiting consent.
 let headerText = ProcessInfo.processInfo.environment["PICKER_HEADER"] ?? ""
 
+// PICKER_QUERY pre-fills the search field. The panel opens already filtered,
+// with the text selected, so the first keystroke replaces it -- a starting
+// point rather than something to delete. This is what lets one leader key plus
+// a letter land you in a part of the launcher without a second list to build.
+let initialQuery = ProcessInfo.processInfo.environment["PICKER_QUERY"] ?? ""
+
 // An optional second action on the same row. When set, shift+return prints the
 // same label but exits 2, so the caller can offer a variant -- "open here" vs
 // "open in a new workspace" -- without doubling the number of rows.
@@ -307,6 +313,7 @@ final class Picker: NSObject, NSTextFieldDelegate, NSWindowDelegate {
                                                                 weight: .medium)
 
         field.placeholderString = promptText
+        if !initialQuery.isEmpty { field.stringValue = initialQuery }
         field.font = uiFont(17)
         field.textColor = cText
         field.isBordered = false
@@ -496,6 +503,12 @@ final class Picker: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         panel.makeFirstResponder(field)
         // The caret defaults to the system accent colour; tie it to the theme.
         (field.currentEditor() as? NSTextView)?.insertionPointColor = cAccent
+        if !initialQuery.isEmpty {
+            // Filter to it, then select it, so the list is already narrowed and
+            // the next keystroke replaces the word rather than appending to it.
+            controlTextDidChange(Notification(name: NSControl.textDidChangeNotification))
+            (field.currentEditor() as? NSTextView)?.selectAll(nil)
+        }
     }
 }
 

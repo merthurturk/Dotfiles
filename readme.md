@@ -271,6 +271,27 @@ helper owns the Calendars permission and publishes what is next into the state
 directory; the bar and the launcher only read files. It asks for access the
 first time it runs — `dot doctor` says so if it is still missing.
 
+## The leader key
+
+`⌥⇧space`, then one letter:
+
+| | |
+|---|---|
+| `s` | scenes |
+| `w` | windows |
+| `t` | themes |
+| `c` | today's agenda |
+| `k` | this list |
+| `space` | everything |
+| `esc` | back out |
+
+Thirty-odd capabilities do not fit on thirty-odd chords, and most of what this
+setup can do was reachable only through the palette. One chord plus a mnemonic
+letter is a smaller thing to remember than a dozen unrelated combinations — and
+every capability added from now on gets a key for free, because the letters open
+the **launcher filtered** rather than naming commands. The bar shows `DOT` while
+the mode is active, and it is always exactly one action long.
+
 ## Every shortcut
 
 ```sh

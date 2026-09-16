@@ -135,8 +135,13 @@ if [ "$PICK" -eq 1 ] && [ -x "$PICKER" ]; then
             | PICKER_HEADER="$(world_clocks)" pick "Today" calendar-agenda)"
   [ -n "$choice" ] || exit 0
 
-  # The picker hands back the label; look the row up again for its URL.
-  target="$(printf '%s\n' "$rows" | awk -F'\t' -v c="$choice" '$1 == c { print $3; exit }')"
+  # The picker hands back the label *trimmed* -- picker.swift strips
+  # whitespace when it parses each line -- and these labels begin with a
+  # two-space marker column. Comparing raw therefore never matched, and every
+  # event quietly opened Calendar instead of joining. Trim both sides.
+  target="$(printf '%s\n' "$rows" | awk -F'\t' -v c="$choice" '
+    { k = $1; sub(/^[ \t]+/, "", k); sub(/[ \t]+$/, "", k) }
+    k == c { print $3; exit }')"
   if [ -n "$target" ]; then
     # Which profile. A meeting link is only signed in under one of them, and
     # letting Chrome pick means landing on the wrong account and being asked
