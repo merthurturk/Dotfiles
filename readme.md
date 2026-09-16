@@ -125,6 +125,10 @@ dot doctor                 dot bar reload
 dot capabilities --json    # the whole surface, machine-readable
 ```
 
+The rest are thin wrappers over AeroSpace, reachable from the palette and from
+the keys `dot keys` lists: `dot window balance`, `dot window float`,
+`dot window flatten`, `dot workspace goto`, `dot config reload`.
+
 A descriptor looks like this, and lives next to the code it describes:
 
 ```json

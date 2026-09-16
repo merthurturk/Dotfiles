@@ -55,10 +55,23 @@ is wrong on a 2560pt monitor — typically the side window ends up a sliver.
 dot window reflow
 ```
 
-re-applies each open scene's declared ratio for the current display. It runs
-automatically on `display_change`, and resizes hidden workspaces in place, so
-nothing visibly moves. `⌥⇧\` (balance) also fixes the overlap but equalises the
-windows, throwing the ratio away.
+re-applies each open scene's declared ratio, and runs automatically on
+`display_change`.
+
+It can only fix a workspace **you are looking at**. AeroSpace gives a hidden one
+no geometry at all — its windows sit parked off-screen at whatever size they
+last had — so a resize aimed at one lands on nothing. The rest are checked as
+you arrive on them, which is the first moment their layout is real.
+
+To see rather than guess:
+
+```sh
+dot window geometry --workspace 5
+```
+
+A `·` means the workspace is hidden, and its width is parked rather than laid
+out. `⌥⇧\` (balance) also fixes an overlap, but equalises the windows and
+throws the ratio away.
 
 ## A scene opens on the wrong workspace
 
@@ -69,6 +82,45 @@ If it does, check that the ledger isn't stale:
 dot scene list --json
 cat ~/.local/state/aerospace/scenes
 ```
+
+## The next event isn't showing in the bar
+
+Three things have to be true, in this order:
+
+```sh
+dot doctor | grep -i calendar
+```
+
+1. **The calendar is in macOS.** EventKit reads what *System Settings > Internet
+   Accounts* syncs. If Google is not there, there is nothing to read — and
+   macOS will not even prompt for permission while no account exists. It
+   returns "denied" with no error, which looks like a refusal and is a question
+   never asked.
+2. **The helper has Calendars access.** *Privacy & Security > Calendars*, `dot
+   calendar` set to Full Access. Note the pane has **no "+" button**: an app
+   only appears there once it has asked, which is why the helper is a `.app`
+   with an identity of its own.
+3. **The agent is running.** It publishes the files the bar reads:
+
+```sh
+launchctl print gui/$(id -u)/sh.dotfiles.calendar | grep state
+cat ~/.local/state/aerospace/next-event.tsv
+```
+
+An empty `next-event.tsv` with a populated `agenda.tsv` is not a fault: nothing
+is left today, so the chip draws nothing.
+
+## The leader key does nothing
+
+`⌥⇧space` enters a mode rather than running something, so the bar should show
+`DOT` and the next letter acts. If it does not:
+
+```sh
+dot keys | sed -n '/Leader/,/back out/p'   # what the letters are
+aerospace reload-config                    # after editing aerospace.toml
+```
+
+`esc` always returns to the main mode.
 
 ## A font looks wrong
 

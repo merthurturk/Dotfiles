@@ -132,6 +132,7 @@ started to differ.
 | `workspace_rows <exclude>` | occupied workspaces plus the first empty one, annotated |
 | `json_update <file> <jq args…>` | atomic read-modify-write through `mktemp` |
 | `repaint` | nudge the bar so a change shows now, not on the next switch |
+| `_ledger_lib` / `_chrome_lib` | source the ledger or Chrome-profile owner, once, on first use — then `ledger_rows`, `scene_of`, `ids_of`, `workspaces_of`, `chrome_pick_profile` and the rest are yours |
 
 Two things deliberately *not* there: `SCENES_JSON`, because the shipped file
 must never be read without the local one merged over it; and any helper that

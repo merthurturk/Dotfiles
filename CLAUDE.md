@@ -45,6 +45,22 @@ Required: `id`, `summary`, `destructive`. Plus `guard` whenever destructive
 `instances` to appear in the palette. Details in
 [capabilities](docs/capabilities.md).
 
+### Ask the owner, don't copy it
+
+Four files exist to be `source`d, not executed, so asking costs nothing:
+
+| | |
+|---|---|
+| `config/aerospace/scenes-lib.sh` | the scenes merge, its tombstones, its caches |
+| `config/aerospace/ledger-lib.sh` | the open-scene ledger: format, pruning, MRU order |
+| `config/aerospace/split-lib.sh` | window sizing, gaps, monitor width |
+| `config/aerospace/chrome-lib.sh` | Chrome profiles, and asking which one |
+
+The scenes merge was written out in four places before this; the ledger's
+tab-separated format was parsed by five capabilities, which made its column
+count public API. Both are one implementation now. **Do not add a fifth
+reader.** `libexec/dot/_lib.sh` sources them on first use.
+
 ### Verify against the world, not the exit code
 
 AeroSpace returns 0 and does nothing, routinely. A font string that doesn't
@@ -53,7 +69,7 @@ assert. Several bugs here survived precisely because something reported success.
 
 ### Destructive actions need a ledger, not a prompt
 
-`scene.sh` records what it opened and refuses to close anything else. A
+`ledger-lib.sh` records what a scene opened and refuses to close anything else. A
 confirmation dialog is too easy to click through, and focus drifts on its own,
 so "act on the focused thing" will eventually act on the wrong thing. It already
 did once.
@@ -61,7 +77,13 @@ did once.
 ### Never hardcode a keybinding
 
 Read it from `aerospace.toml` with `keybinding()` in `_lib.sh`. A hand-written
-hint drifts from the binding it describes.
+hint drifts from the binding it describes. `dot keys` renders the whole map
+from that file for the same reason — there is no cheat sheet to keep in step.
+
+New commands usually need **no key at all**: `⌥⇧space` is a leader, and its
+letters open the launcher *filtered* (`dot menu --filter scene`), so anything
+with an `instances` entry is already reachable. Add a chord only when something
+is worth a dedicated one.
 
 ### The launcher's PATH is not your shell's
 
